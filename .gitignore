@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+# derivado y pesado (16 MB): se regenera con python tools/fetch_heights.py
+data/heights.npy
+.claude/

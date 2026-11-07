@@ -1,0 +1,48 @@
+# Recorridos de colectivos de Corrientes (lista de calles en orden). Formato:
+# LÍNEA <número>, RAMAL "<letra>" - <descripción>
+# IDA: calle - calle - ...
+# REGRESO: calle - calle - ...
+
+LÍNEA 104, RAMAL "A" - B° JUAN DE VERA - MORGUE
+IDA: Tte Ibáñez - Elías Abad - Alberdi - Gutnisky - Garay - Av. del IV Centenario - Av. Colón - Hernándarías - Guastavino - Av. 3 de Abril - Buenos Aires - Moreno - La Rioja - Av. Vera - Baibiene - Gdor. López - Cabral - Vélez Sarfield - Agustín P. Justo.
+REGRESO: Agustín P. Justo - Av. Pujol - Paraguay - Pellegrini - Salta - Rivadavia - Entre Ríos - Av. 3 de Abril - Alberdi - Tte. Ibáñez.
+
+LÍNEA 104, RAMAL "B" - T. ERSA - VILLA PATONO - CENTRO
+IDA: Argentina y José Ramón Vidal - Garay - Gutnisky - Alberdi - Elías Abad - Lavalle - Piragine Niveyro - Av. 3 de Abril - San Luís - Rivadavia - Misiones - Irigoyen.
+REGRESO: Irigoyen - España - Pellegrini - Salta - San Martín - Chaco - Av. 3 de Abril - B. de la Vega - Tte. Ibáñez - Elías Abad - Alberdi - Gutnisky - Garay - José Ramón Vidal.
+
+LÍNEA 104, RAMAL "C" - B° 215VIV. - B° PUJOL
+IDA: Alta Gracia - Paysandú - Leloir - Igarzabal - Iberá - Paysandú - Rafaela - Taragui - Av. del IV Centenario - Pío XII - Av. 3 de Abril - La Rioja - Av. Vera - Av. Pujol - Gdor. Pampín - Sargento Cabral - Vélez Sarfield - Gdor. Ruíz - Armenia - Félix de Azara - R. Obligado.
+REGRESO: R. Obligado - José Thelier - Mar del Plata - Zacarías - Sánchez - Armenia - Av. Gdor. Ruíz - Santiago del Estero - José María Rolón - Av. Pujol - Santa Fe - Pellegrini - Salta - Av. 3 de Abril - José Ramón Vidal - Tte. Ibáñez - Av. del IV Centenario - Iberá - Igarzabal - Argentina - Juan de Dios Gómez - Leloir - Paysandú - Alta Gracia.
+
+LÍNEA 104, RAMAL "D" - B° 1000VIV. - MORGUE
+IDA: Gutemberg y Cosquín - Paysandú - Rafaela - Av. La Paz - Av. El Maestro - Santa Cruz - Av. Sarmiento - Tte. Cundom - Vargas Gómez - Av. Tte Ibáñez - Pío XII - Av. 3 de Abril - La Rioja - Av. Vera - Av. Pujol - Gdor. Pampín - Sargento Cabral - Vélez Sarfield.
+REGRESO: Vélez Sarfield - Dr. Felipe Cabral - Santiago del Estero - José María Rolón - Av. Pujol - Santa Fe - Pellegrini - Salta - Av. 3 de Abril - José Ramón Vidal - Av. Tte Ibáñez - Gutemberg - Cosquín.
+
+LÍNEA 105, RAMAL "A" - B° MOLINA PUNTA - PUERTO
+IDA: Las Dalias - Caá Catí - Las Violetas - Josefina Contte - Las Margaritas - Av. Río Chico - Las Violetas - Av. Libertad - Av. Armenia - 19 de Mayo - Av. Gregorio Pomar - Av. Centenario - Av. Chacabuco - San Martín - La Rioja - Puerto.
+REGRESO: Puerto - Av. Costanera - Tucumán - 9 de Julio - Salta - Hipólito Irigoyen - Ayacucho - Av. Centenario - Av. Gregorio Pomar - Rizzuto - 20 de Mayo - Av. Armenia - Av. Libertad - Las Gardenias - Nity Cigersa - Las Dalias.
+
+LÍNEA 105, RAMAL "B" - B° DOCENTE - PUERTO
+IDA: Empedrado y Las Margaritas - Bilbao - Los Tulipanes - Bilbao - Las Pasionarias - Murcia - Sicilia - Badajoz - Argerich - Sheridan - Av. Río Chico - Av. Fernández - Av. Armenia - Av. Gdor. Ruíz - Cocomarola - Ituzaingó - San Martín - La Rioja - Puerto.
+REGRESO: Puerto - Av. Costanera - Tucumán - 9 de Julio - Salta - Yrigoyen - Ayacucho - Chacabuco - Av. Armenia - Av. Fernández - Av. Eva Perón (Río Chico) - Benavídez - Argerich - Madrid - Barcelona - Murcia - Pasionarias - Bilbao - Los Tulipanes - Bilbao - Las Margaritas - Adolfo Mors - Las Violetas - Josefina Contte - Las Margaritas.
+
+LÍNEA 105, RAMAL "C" - B° 250VIV. - PUERTO
+IDA: Calle 37 - Los Crisantemos - Cambá Punta - Las Azucenas - Calle 37 - Río Chico - Ruta 12 - Av. Libertad - Av. Armenia - Av. Gdor. Ruíz - Pellegrini - Catamarca - Av. Vera - Puerto.
+REGRESO: Puerto - Av. Costanera - Tucumán - 9 de Julio - Salta - Hipólito Irigoyen - Gral. Roca - 9 de Julio - Av. Gdor. Ruíz - Av. Armenia - Av. Libertad - Ruta 12 - Río Chico - Calle 37.
+
+LÍNEA 108, RAMAL "A" - B° QUINTANA - CUENCA DEL PLATA / H. VIDAL
+IDA: Ramos Mejía y Av. Cangallo - Av. Frondizi (Medrano) - Loreto - Calle 8 - Cuba - Av. Medrano - Larrea - W. Domínguez - Av. Cazadores Correntinos - Av. Vidal - Av. Chacabuco - Av. Armenia - Av. Gdor. Ruíz - Av. Pujol - Av. Costanera - Tucumán - 9 de Julio - Salta - San Martín - Don Bosco - Av. 3 de Abril - Lavalle - Díaz de Vivar.
+REGRESO: Díaz de Vivar - Lavalle - José Ramón Vidal - Necochea - Pío XII - Av. 3 de Abril - La Rioja - Av. Vera - Av. Pujol - Ayacucho - Av. Chacabuco - Av. Vidal - Av. Cazadores Correntinos - W. Domínguez - Pitágoras - Av. Frondizi (Medrano) - Cuba - Calle 8 - Loreto - Av. Frondizi (Medrano) - Av. Cangallo - Ramos Mejía.
+
+LÍNEA 108, RAMAL "C" - B° 40VIV. QUINTANA/SAN ROQUE - CENTRO
+IDA: Paul Groussac y Ramos Mejía - Av. Cangallo - Av. Frondizi (Medrano) - Guayquiraro - Silvina Ocampo - Guayquiraro - Av. Frondizi (Medrano) - Cuba - Picasso - Ex Vías - Av. Vidal - Av. Ferré - Av. Artigas - Av. Pujol - Pellegrini.
+REGRESO: Pellegrini - Salta - Hipólito Irigoyen - La Rioja - 9 de Julio - Av. Pujol - Av. Artigas - Av. Ferré - Av. Vidal - Ex Vías - Picasso - Cuba - Calle 2 - Loreto - Av. Frondizi (Medrano) - Av. Cangallo - Ramos Mejía.
+
+LÍNEA 109, RAMAL "A" - B° RIO PARANÁ - PARQUE DEL RECUERDO
+IDA: Av. Alta Gracia - Av. Maipú - Av. 3 de Abril - Catamarca - Bolívar - Roca - 9 de Julio - Av. Gdor. Ruíz - Av. Armenia - Av. Libertad - Ruta 12 - Ruta Provincial 43.
+REGRESO: Ruta 43 - Ruta 12 - Av. Libertad - Av. Armenia - Av. Gdor. Ruíz - Pellegrini - Santa Fe - Av. 3 de Abril - Av. Maipú - Av. Alta Gracia.
+
+LÍNEA 109, RAMAL "B" - SERVICIO ESPECIAL - B° YECOHA
+IDA: Terminal de Omnibus - Av. Maipú - Av. 3 de Abril - Catamarca - Bolívar - Roca - 9 de Julio - Av. Gdor. Ruíz - Av. Armenia - Av. Libertad - Ruta 12.
+REGRESO: Ruta 12 - Av. Libertad - Av. Armenia - Av. Gdor. Ruíz - Pellegrini - Santa Fe - Av. 3 de Abril - Av. Maipú - Av. Aconcagua - Los Atacamas - Caribe - Av. Maipú - Terminal de Omnibus.

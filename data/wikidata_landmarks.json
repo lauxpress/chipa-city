@@ -1,0 +1,1797 @@
+[
+ {
+  "qid": "Q106890009",
+  "name": "Avenida 3 de Abril",
+  "types": [
+   "avenida"
+  ],
+  "lat": -27.475,
+  "lon": -58.842
+ },
+ {
+  "qid": "Q4863750",
+  "name": "Barrio San Pedro Pescador",
+  "types": [
+   "localidad"
+  ],
+  "lat": -27.46111111,
+  "lon": -58.86777778,
+  "article": "https://es.wikipedia.org/wiki/Barrio_San_Pedro_Pescador"
+ },
+ {
+  "qid": "Q83869170",
+  "name": "Biblioteca - Centro de Documentación E Información",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.46388,
+  "lon": -58.839217
+ },
+ {
+  "qid": "Q83869448",
+  "name": "Biblioteca - Ces. Centro de Estudios Sociales. Unne. Universidad del Nordeste. Rectorado de la Unne",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.46316,
+  "lon": -58.836294
+ },
+ {
+  "qid": "Q83869134",
+  "name": "Biblioteca - Conicet - Instituto de Botánica del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465515,
+  "lon": -58.822963
+ },
+ {
+  "qid": "Q83869165",
+  "name": "Biblioteca - Facultad de Medicina. Universidad Nacional del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.47325,
+  "lon": -58.835727
+ },
+ {
+  "qid": "Q83873381",
+  "name": "Biblioteca - Facultad de Relaciones Laborales. Comunicación Social y Turismo. Universidad Nacional del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.46316,
+  "lon": -58.836294
+ },
+ {
+  "qid": "Q83869160",
+  "name": "Biblioteca - Instituto de Botánica del Nordeste Ibone. Universidad Nacional del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465515,
+  "lon": -58.822963
+ },
+ {
+  "qid": "Q83869143",
+  "name": "Biblioteca - Instituto de Ictiologia del Nordeste (Inicne) Universidad Nacional del Nordeste.",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465518,
+  "lon": -58.822882
+ },
+ {
+  "qid": "Q83869106",
+  "name": "Biblioteca - Inta - Estación Experimental Agropecuaria Corrientes",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465807,
+  "lon": -58.839198
+ },
+ {
+  "qid": "Q83873378",
+  "name": "Biblioteca - Legislatura de la Provincia de Corrientes",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.463363,
+  "lon": -58.838973
+ },
+ {
+  "qid": "Q83873376",
+  "name": "Biblioteca - Posgrado de Derecho. Universidad Nacional del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.462346,
+  "lon": -58.838902
+ },
+ {
+  "qid": "Q83869149",
+  "name": "Biblioteca - Universidad de la Cuenca del Plata",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.474985,
+  "lon": -58.852428
+ },
+ {
+  "qid": "Q83872655",
+  "name": "Biblioteca Agropecuaria",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465518,
+  "lon": -58.822882
+ },
+ {
+  "qid": "Q83873191",
+  "name": "Biblioteca Agropecuaria",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465515,
+  "lon": -58.822963
+ },
+ {
+  "qid": "Q5727716",
+  "name": "Biblioteca Agropecuaria de la Universidad Nacional del Nordeste",
+  "types": [
+   "biblioteca"
+  ],
+  "lat": -27.45936111,
+  "lon": -58.82180556,
+  "article": "https://es.wikipedia.org/wiki/Biblioteca_Agropecuaria_de_la_UNNE"
+ },
+ {
+  "qid": "Q83872635",
+  "name": "Biblioteca Central Profesor José Fidanza",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.462079,
+  "lon": -58.834582
+ },
+ {
+  "qid": "Q83869140",
+  "name": "Biblioteca Ciencias Agropecuaria",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465518,
+  "lon": -58.822882
+ },
+ {
+  "qid": "Q64338147",
+  "name": "Biblioteca Popular Bartolomé Mitre",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.464633,
+  "lon": -58.832483
+ },
+ {
+  "qid": "Q64338153",
+  "name": "Biblioteca Popular Coembá Porá (Lindo Amanecer",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.482467,
+  "lon": -58.840983
+ },
+ {
+  "qid": "Q64338163",
+  "name": "Biblioteca Popular Escolar Fray J. de la Quintana",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.46455,
+  "lon": -58.833267
+ },
+ {
+  "qid": "Q64338165",
+  "name": "Biblioteca Popular Escolar José F.de San Martín",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.471226,
+  "lon": -58.839584
+ },
+ {
+  "qid": "Q64338170",
+  "name": "Biblioteca Popular Escritores Correntinos",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.477433,
+  "lon": -58.84275
+ },
+ {
+  "qid": "Q64338172",
+  "name": "Biblioteca Popular Eva Perón",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.473933,
+  "lon": -58.84895
+ },
+ {
+  "qid": "Q64338179",
+  "name": "Biblioteca Popular José R. Mariño",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.467533,
+  "lon": -58.830317
+ },
+ {
+  "qid": "Q64338181",
+  "name": "Biblioteca Popular Joséfina Conte",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.46495,
+  "lon": -58.841367
+ },
+ {
+  "qid": "Q64338190",
+  "name": "Biblioteca Popular Popular",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.465617,
+  "lon": -58.833233
+ },
+ {
+  "qid": "Q64338196",
+  "name": "Biblioteca Popular Rincón del milenium",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.477409,
+  "lon": -58.842788
+ },
+ {
+  "qid": "Q64338205",
+  "name": "Biblioteca Tec. Popular Bernardino Rivadavia",
+  "types": [
+   "biblioteca popular"
+  ],
+  "lat": -27.4836,
+  "lon": -58.827217
+ },
+ {
+  "qid": "Q83872657",
+  "name": "Biblioteca de Criminalística",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.462027,
+  "lon": -58.83247
+ },
+ {
+  "qid": "Q83873371",
+  "name": "Biblioteca de Criminalística",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.462027,
+  "lon": -58.83247
+ },
+ {
+  "qid": "Q83872660",
+  "name": "Biblioteca de Medicina",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.47325,
+  "lon": -58.835727
+ },
+ {
+  "qid": "Q83873183",
+  "name": "Biblioteca de Posgrado de Derecho",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.462346,
+  "lon": -58.838902
+ },
+ {
+  "qid": "Q83872664",
+  "name": "Biblioteca de Relaciones Laborales. Comunicación Social y Turismo",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.4655,
+  "lon": -58.82336
+ },
+ {
+  "qid": "Q83872639",
+  "name": "Biblioteca de la Eea Corrientes",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465807,
+  "lon": -58.839198
+ },
+ {
+  "qid": "Q83872646",
+  "name": "Biblioteca del Instituto de Botánica del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465518,
+  "lon": -58.822882
+ },
+ {
+  "qid": "Q83872651",
+  "name": "Biblioteca del Instituto de Ictiología del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465518,
+  "lon": -58.822882
+ },
+ {
+  "qid": "Q83873189",
+  "name": "Biblioteca del Instituto de Ictiología del Nordeste. Inicne",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.465518,
+  "lon": -58.822882
+ },
+ {
+  "qid": "Q94604550",
+  "name": "CAPS I San Jose",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.469287,
+  "lon": -58.842773
+ },
+ {
+  "qid": "Q94604562",
+  "name": "CAPS Nº 2 Barrio Domingo Cabred",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.48247,
+  "lon": -58.84153
+ },
+ {
+  "qid": "Q94604561",
+  "name": "CAPS Nº 2 Emilio R. Coni",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.467294,
+  "lon": -58.815968
+ },
+ {
+  "qid": "Q94604575",
+  "name": "CAPS San Pablo",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.479584,
+  "lon": -58.826393
+ },
+ {
+  "qid": "Q94604595",
+  "name": "CAPS Viiii Barrio Santa Teresita",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.481795,
+  "lon": -58.825307
+ },
+ {
+  "qid": "Q112039056",
+  "name": "Casa Molinas - museo de sitio histórico y arqueológico",
+  "types": [
+   "museo"
+  ],
+  "lat": -27.464983485,
+  "lon": -58.838520808
+ },
+ {
+  "qid": "Q16490382",
+  "name": "Casa de Gobierno de Corrientes",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.46372222,
+  "lon": -58.83877778,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Casa%20de%20Gobierno%20de%20la%20Provincia%20de%20Corrientes%2001.jpg",
+  "article": "https://es.wikipedia.org/wiki/Casa_de_Gobierno_de_Corrientes"
+ },
+ {
+  "qid": "Q59383806",
+  "name": "Casa de los Martínez",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.462889,
+  "lon": -58.838111
+ },
+ {
+  "qid": "Q59383807",
+  "name": "Casa del Gobernador Manuel I. Lagraña",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.465194,
+  "lon": -58.839139,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Casa%20del%20Gobernador%20Manuel%20I.%20Lagra%C3%B1a%20%28entrada%29.jpg"
+ },
+ {
+  "qid": "Q16941641",
+  "name": "Casa del Gobernador Manuel Lagraña",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.46525,
+  "lon": -58.83913889,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Casa%20del%20Gobernador%20Manuel%20I.%20Lagra%C3%B1a.jpg",
+  "article": "https://es.wikipedia.org/wiki/Casa_del_Gobernador_Manuel_Lagra%C3%B1a"
+ },
+ {
+  "qid": "Q16302496",
+  "name": "Catedral Nuestra Señora del Rosario",
+  "types": [
+   "catedral"
+  ],
+  "lat": -27.46916667,
+  "lon": -58.83130556,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Iglesia%20Catedral%2C%20Corrientes.jpg",
+  "article": "https://es.wikipedia.org/wiki/Catedral_de_Nuestra_Se%C3%B1ora_del_Rosario_(Corrientes)"
+ },
+ {
+  "qid": "Q77084600",
+  "name": "Centro Científico Tecnológico - Nordeste",
+  "types": [
+   "instalación"
+  ],
+  "lat": -27.46424,
+  "lon": -58.841395
+ },
+ {
+  "qid": "Q94604780",
+  "name": "Centro De Salud Unidad Penitenciaria Nº 1",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.473815,
+  "lon": -58.850652
+ },
+ {
+  "qid": "Q94604794",
+  "name": "Centro Medico Sa",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.474836,
+  "lon": -58.839948
+ },
+ {
+  "qid": "Q60812688",
+  "name": "Centro clandestino de detención del Regimiento de Infantería Nº 9",
+  "types": [
+   "centro clandestino de detención y tortura",
+   "edificio"
+  ],
+  "lat": -27.473157,
+  "lon": -58.855467
+ },
+ {
+  "qid": "Q83873384",
+  "name": "Centro de Documentación E Información",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.471162,
+  "lon": -58.822381
+ },
+ {
+  "qid": "Q83869137",
+  "name": "Centro de Documentación E Información Educativa y Biblioteca Central J. Fidanza",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.462079,
+  "lon": -58.834582
+ },
+ {
+  "qid": "Q132184685",
+  "name": "Centro de Instrucción de Idiomas",
+  "types": [
+   "academia militar"
+  ],
+  "lat": -27.4606,
+  "lon": -58.8305,
+  "article": "https://es.wikipedia.org/wiki/Centro_de_Instrucci%C3%B3n_de_Idiomas"
+ },
+ {
+  "qid": "Q94604811",
+  "name": "Clinica Centro Medico Del Parque",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.464644,
+  "lon": -58.833613
+ },
+ {
+  "qid": "Q94604825",
+  "name": "Clinica Del Niño Sa",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.472937,
+  "lon": -58.828882
+ },
+ {
+  "qid": "Q94604837",
+  "name": "Clinica El Modelo",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.473308,
+  "lon": -58.834547
+ },
+ {
+  "qid": "Q94604852",
+  "name": "Clinica Maternal Del Ibera",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.462499,
+  "lon": -58.833828
+ },
+ {
+  "qid": "Q94604859",
+  "name": "Clinica Mayo Sa",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.463113,
+  "lon": -58.834237
+ },
+ {
+  "qid": "Q94604881",
+  "name": "Clinica Sagrado Corazon",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.483266,
+  "lon": -58.832358
+ },
+ {
+  "qid": "Q140575828",
+  "name": "Colegio E Instituto San Jose I.2",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.464278967,
+  "lon": -58.837191663
+ },
+ {
+  "qid": "Q140575820",
+  "name": "Colegio Informatico San Juan de Vera",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.462730201,
+  "lon": -58.838180481
+ },
+ {
+  "qid": "Q140575832",
+  "name": "Colegio Salesiano Y Anexo Nivel Inicial El Saltimbanqui Ip-6",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela urbana"
+  ],
+  "lat": -27.466186422,
+  "lon": -58.836299764
+ },
+ {
+  "qid": "Q140575814",
+  "name": "Colegio Santa Ana Ipp-9/ip-48/is-58",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.475839985,
+  "lon": -58.844728672
+ },
+ {
+  "qid": "Q140575744",
+  "name": "Colegio del Sagrado Corazon Y Jardin de Inf.El Patito Feo",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela urbana"
+  ],
+  "lat": -27.481081891,
+  "lon": -58.830182859
+ },
+ {
+  "qid": "Q140575788",
+  "name": "Colegio privado John Kennedy I.P.P.14 - I.P.35 - I.S.7",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.471979165,
+  "lon": -58.823852647
+ },
+ {
+  "qid": "Q140576186",
+  "name": "Colegio privado Padre Juan Guido Luchelli Is.3",
+  "types": [
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.481085568,
+  "lon": -58.85014001
+ },
+ {
+  "qid": "Q140575879",
+  "name": "Colegio privado United World School I.P.83 Y Jardin de Infantes United World Kinder Ipp-74",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.4712257,
+  "lon": -58.8395844
+ },
+ {
+  "qid": "Q140575825",
+  "name": "Colegio secundario Brigadier General Pedro Ferre",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.471922047,
+  "lon": -58.820155729
+ },
+ {
+  "qid": "Q140575823",
+  "name": "Colegio secundario General San Martin",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.462423246,
+  "lon": -58.841628542
+ },
+ {
+  "qid": "Q140575871",
+  "name": "Colegio secundario Ibera",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.4837424,
+  "lon": -58.845786866
+ },
+ {
+  "qid": "Q140575877",
+  "name": "Colegio secundario Ing.Eliseo Popolizio",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.4712257,
+  "lon": -58.8395844
+ },
+ {
+  "qid": "Q140575876",
+  "name": "Colegio secundario Juana F.Cabral",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.4712257,
+  "lon": -58.8395844
+ },
+ {
+  "qid": "Q140575826",
+  "name": "Colegio secundario Manuel Belgrano",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.462408648,
+  "lon": -58.841475943
+ },
+ {
+  "qid": "Q140265682",
+  "name": "Colegio secundario Pte. Juan Domingo Perón",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.477614836,
+  "lon": -58.817302514
+ },
+ {
+  "qid": "Q140575860",
+  "name": "Colegio secundario Pte.Hipolito Yrigoyen",
+  "types": [
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.46963416,
+  "lon": -58.840097076
+ },
+ {
+  "qid": "Q22679834",
+  "name": "Columna conmemorativa, Fundación de Corrientes",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.466611,
+  "lon": -58.822333,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Columna%20Conmemorativa%20de%20la%20Fundaci%C3%B3n%20de%20Corrientes%20%284%29.jpg",
+  "article": "https://es.wikipedia.org/wiki/Columna_conmemorativa_de_la_fundaci%C3%B3n_de_Corrientes"
+ },
+ {
+  "qid": "Q16942133",
+  "name": "Conjunto Urbano Plaza 25 de Mayo",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.463278,
+  "lon": -58.839583,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Conjunto%20Urbano%20Plaza%2025%20de%20Mayo%2002.JPG",
+  "article": "https://es.wikipedia.org/wiki/Plaza_25_de_Mayo_(Corrientes)"
+ },
+ {
+  "qid": "Q5785719",
+  "name": "Convento de San Francisco",
+  "types": [
+   "convento de frailes franciscanos"
+  ],
+  "lat": -27.462583333,
+  "lon": -58.835472222,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Convento%20de%20San%20Francisco%20-%20Corrientes.JPG",
+  "article": "https://es.wikipedia.org/wiki/Convento_de_San_Francisco_(Corrientes)"
+ },
+ {
+  "qid": "Q44211",
+  "name": "Corrientes",
+  "types": [
+   "ciudad de Argentina",
+   "gran ciudad",
+   "municipio"
+  ],
+  "lat": -27.483333333,
+  "lon": -58.816666666,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Corrientes%20Montage.jpg",
+  "article": "https://es.wikipedia.org/wiki/Corrientes_(ciudad)"
+ },
+ {
+  "qid": "Q56240703",
+  "name": "Delegación Policía Federal Corrientes",
+  "types": [
+   "centro clandestino de detención y tortura"
+  ],
+  "lat": -27.461475,
+  "lon": -58.8399
+ },
+ {
+  "qid": "Q83869146",
+  "name": "Departamento Biblioteca",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.47325,
+  "lon": -58.835727
+ },
+ {
+  "qid": "Q140554780",
+  "name": "E.E.P. Nº 159 - Provincia de Corrientes",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela rural"
+  ],
+  "lat": -27.45927,
+  "lon": -58.866407
+ },
+ {
+  "qid": "Q140555224",
+  "name": "E.E.S. Nº 107 - Orillas del Parana (cep 107)",
+  "types": [
+   "escuela pública",
+   "escuela rural",
+   "escuela secundaria"
+  ],
+  "lat": -27.459302,
+  "lon": -58.866582
+ },
+ {
+  "qid": "Q140575749",
+  "name": "Escuela Hogar Pte.Juan D. Peron",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.477297343,
+  "lon": -58.817452117
+ },
+ {
+  "qid": "Q84048804",
+  "name": "Escuela Normal Doctor Juan Gregorio Pujol",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana",
+   "institución educativa universitaria",
+   "jardín de infancia",
+   "monumento histórico"
+  ],
+  "lat": -27.471150881,
+  "lon": -58.836464262,
+  "article": "https://es.wikipedia.org/wiki/Escuela_Normal_Doctor_Juan_Gregorio_Pujol"
+ },
+ {
+  "qid": "Q59383809",
+  "name": "Escuela Normal Dr. Juan Gregorio Pujol",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.471167,
+  "lon": -58.8365
+ },
+ {
+  "qid": "Q140575790",
+  "name": "Escuela Normal Jose Manuel Estrada",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.460042083,
+  "lon": -58.822651358
+ },
+ {
+  "qid": "Q17630954",
+  "name": "Escuela Normal José Manuel Estrada",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.459778,
+  "lon": -58.822694,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Escuela%20Normal%20Jos%C3%A9%20Manuel%20Estrada.JPG",
+  "article": "https://es.wikipedia.org/wiki/Escuela_Normal_Jos%C3%A9_Manuel_Estrada"
+ },
+ {
+  "qid": "Q59383828",
+  "name": "Escuela Normal “Doctor Juan Gregorio Pujol”",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.471056,
+  "lon": -58.836611
+ },
+ {
+  "qid": "Q140575772",
+  "name": "Escuela N° 808 ¨dr. Victoriano E. Montes¨",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.46163159,
+  "lon": -58.823599653
+ },
+ {
+  "qid": "Q140575771",
+  "name": "Escuela Nº 1 Manuel Belgrano",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.469335391,
+  "lon": -58.830931884
+ },
+ {
+  "qid": "Q140575812",
+  "name": "Escuela Nº 11 Dr.Lisandro Segovia",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.479440248,
+  "lon": -58.837975653
+ },
+ {
+  "qid": "Q140575773",
+  "name": "Escuela Nº 12 Almirante Guillermo Brown",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.474026798,
+  "lon": -58.818554149
+ },
+ {
+  "qid": "Q140575829",
+  "name": "Escuela Nº 155 San Vicente de Paul",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.473027302,
+  "lon": -58.836678346
+ },
+ {
+  "qid": "Q140575785",
+  "name": "Escuela Nº 157 Tercera Orden de San Franciso de Asis",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.474393658,
+  "lon": -58.821842051
+ },
+ {
+  "qid": "Q140575830",
+  "name": "Escuela Nº 160 Nuestra Sra.de La Misericordia",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.466320703,
+  "lon": -58.84080672
+ },
+ {
+  "qid": "Q140575822",
+  "name": "Escuela Nº 2 Domingo Faustino Sarmiento",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.463298071,
+  "lon": -58.840336896
+ },
+ {
+  "qid": "Q140575809",
+  "name": "Escuela Nº 299 Juan Alfredo Asuad",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.482957655,
+  "lon": -58.851359657
+ },
+ {
+  "qid": "Q140575802",
+  "name": "Escuela Nº 3 del Centenario",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.470338011,
+  "lon": -58.839993722
+ },
+ {
+  "qid": "Q140575776",
+  "name": "Escuela Nº 4 Mariano Moreno",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.464824015,
+  "lon": -58.832907862
+ },
+ {
+  "qid": "Q140575808",
+  "name": "Escuela Nº 402 Genaro Beron de Astrada",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.482614746,
+  "lon": -58.845560901
+ },
+ {
+  "qid": "Q140575780",
+  "name": "Escuela Nº 5 España",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.465033169,
+  "lon": -58.818182091
+ },
+ {
+  "qid": "Q140575824",
+  "name": "Escuela Nº 6 Publio Escobar",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.465883181,
+  "lon": -58.823878184
+ },
+ {
+  "qid": "Q140575819",
+  "name": "Escuela Nº 607 Bernardino Rivadavia",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.481731119,
+  "lon": -58.828948163
+ },
+ {
+  "qid": "Q140575818",
+  "name": "Escuela Nº 7 Isabel E.Vera",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.477497692,
+  "lon": -58.824328613
+ },
+ {
+  "qid": "Q140575804",
+  "name": "Escuela Nº 9 Gustavo Solano Gomez",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.476641298,
+  "lon": -58.846989195
+ },
+ {
+  "qid": "Q140575806",
+  "name": "Escuela Pia Union Sta.Teresita del Niño Jesus Ip.12/is.62/ipp.70",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.483972494,
+  "lon": -58.815252972
+ },
+ {
+  "qid": "Q140575778",
+  "name": "Escuela Sagrado Corazon de Jesus I.P.13",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela urbana"
+  ],
+  "lat": -27.481291267,
+  "lon": -58.830231669
+ },
+ {
+  "qid": "Q140575817",
+  "name": "Escuela Tecnica Bernardino Rivadavia",
+  "types": [
+   "escuela pública",
+   "escuela técnica",
+   "escuela urbana"
+  ],
+  "lat": -27.483492764,
+  "lon": -58.828137443
+ },
+ {
+  "qid": "Q140575781",
+  "name": "Escuela Tecnica Brigadier Gral. Pedro Ferre",
+  "types": [
+   "escuela pública",
+   "escuela técnica",
+   "escuela urbana"
+  ],
+  "lat": -27.457477396,
+  "lon": -58.818858785
+ },
+ {
+  "qid": "Q140575869",
+  "name": "Escuela Tecnica Construcciones Portuarias Y Vias Navegables",
+  "types": [
+   "escuela pública",
+   "escuela técnica",
+   "escuela urbana"
+  ],
+  "lat": -27.460816539,
+  "lon": -58.832649794
+ },
+ {
+  "qid": "Q140575763",
+  "name": "Escuela Tecnica Juana Manso",
+  "types": [
+   "escuela pública",
+   "escuela técnica",
+   "escuela urbana"
+  ],
+  "lat": -27.483012547,
+  "lon": -58.826615455
+ },
+ {
+  "qid": "Q132187129",
+  "name": "Escuela de Idiomas del Ejército",
+  "types": [
+   "academia militar"
+  ],
+  "lat": -27.4606,
+  "lon": -58.8305,
+  "article": "https://es.wikipedia.org/wiki/Escuela_de_Idiomas_del_Ej%C3%A9rcito"
+ },
+ {
+  "qid": "Q140575803",
+  "name": "Escuela primaria Nº 10 Remedios de E.de San Martin",
+  "types": [
+   "escuela primaria",
+   "escuela pública",
+   "escuela urbana"
+  ],
+  "lat": -27.47235117,
+  "lon": -58.849292158
+ },
+ {
+  "qid": "Q140575797",
+  "name": "Escuela privada Taragui",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.468136286,
+  "lon": -58.840077244
+ },
+ {
+  "qid": "Q5841804",
+  "name": "Estación Corrientes",
+  "types": [
+   "estación de ferrocarril antigua"
+  ],
+  "lat": -27.471344444,
+  "lon": -58.822419444,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Corrientes%20station%20fc%20econom.jpg",
+  "article": "https://es.wikipedia.org/wiki/Estaci%C3%B3n_Corrientes_(Ferrocarril_Econ%C3%B3mico_Correntino)"
+ },
+ {
+  "qid": "Q5400286",
+  "name": "Estadio José Antonio Romero Feris",
+  "types": [
+   "instalación deportiva"
+  ],
+  "lat": -27.483778,
+  "lon": -58.829883,
+  "article": "https://es.wikipedia.org/wiki/Estadio_Jos%C3%A9_Antonio_Romero_Feris"
+ },
+ {
+  "qid": "Q5400288",
+  "name": "Estadio José Jorge Conte",
+  "types": [
+   "estadio cubierto"
+  ],
+  "lat": -27.45895,
+  "lon": -58.82993,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Estadio%20Jos%C3%A9%20Jorge%20Conte.JPG"
+ },
+ {
+  "qid": "Q16566012",
+  "name": "Facultad de Ciencias Exactas y Naturales y Agrimensura (UNNE)",
+  "types": [
+   "facultad universitaria"
+  ],
+  "lat": -27.46680556,
+  "lon": -58.83205556,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/FACENA%20%28UNNE%29.jpg",
+  "article": "https://es.wikipedia.org/wiki/Facultad_de_Ciencias_Exactas_y_Naturales_y_Agrimensura"
+ },
+ {
+  "qid": "Q8960734",
+  "name": "Facultad de Medicina (UNNE)",
+  "types": [
+   "facultad universitaria"
+  ],
+  "lat": -27.473364125,
+  "lon": -58.835832619,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Facultad%20de%20Medicina.jpg",
+  "article": "https://es.wikipedia.org/wiki/Facultad_de_Medicina_(UNNE)"
+ },
+ {
+  "qid": "Q5884295",
+  "name": "Gran Corrientes",
+  "types": [
+   "aglomeración urbana"
+  ],
+  "lat": -27.483333333,
+  "lon": -58.816666666,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Pasodelapatria-playa-pelicano.jpg",
+  "article": "https://es.wikipedia.org/wiki/Gran_Corrientes"
+ },
+ {
+  "qid": "Q83873364",
+  "name": "Hemeroteca de Facultad de Ciencias Exactas. Universidad Nacional del Nordeste",
+  "types": [
+   "biblioteca especializada"
+  ],
+  "lat": -27.4669,
+  "lon": -58.832323
+ },
+ {
+  "qid": "Q59383811",
+  "name": "Hogar Escuela Nº 13 Presidente Juan D. Perón",
+  "types": [
+   "edificio"
+  ],
+  "lat": -27.477472,
+  "lon": -58.81825
+ },
+ {
+  "qid": "Q94604941",
+  "name": "Hospital De Salud Mental San Francisco De Asis",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.45992,
+  "lon": -58.819094
+ },
+ {
+  "qid": "Q94604970",
+  "name": "Hospital Escuela Jose Francisco De San Martin",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.474496,
+  "lon": -58.835714
+ },
+ {
+  "qid": "Q97275645",
+  "name": "Hospital Escuela José Francisco de San Martín",
+  "types": [
+   "hospital público"
+  ],
+  "lat": -27.4747358,
+  "lon": -58.8357235,
+  "article": "https://es.wikipedia.org/wiki/Hospital_Escuela_Jos%C3%A9_Francisco_de_San_Mart%C3%ADn"
+ },
+ {
+  "qid": "Q94604979",
+  "name": "Hospital Jose Ramon Vidal (capital)",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.479451,
+  "lon": -58.838971
+ },
+ {
+  "qid": "Q17633907",
+  "name": "Hospital José Ramón Vidal",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.47936111,
+  "lon": -58.83894444,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Hospital%20Jos%C3%A9%20Ram%C3%B3n%20Vidal.jpg",
+  "article": "https://es.wikipedia.org/wiki/Hospital_Jos%C3%A9_Ram%C3%B3n_Vidal"
+ },
+ {
+  "qid": "Q94605007",
+  "name": "Hospital Materno Neonatal Eloisa Torrent De Vidal",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.480404,
+  "lon": -58.839097
+ },
+ {
+  "qid": "Q94605018",
+  "name": "Hospital Pediatrico Juan Pablo Ii",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.475922,
+  "lon": -58.818591
+ },
+ {
+  "qid": "Q97175011",
+  "name": "Hospital Pediátrico Juan Pablo II",
+  "types": [
+   "hospital de niños"
+  ],
+  "lat": -27.4756774,
+  "lon": -58.8190681,
+  "article": "https://es.wikipedia.org/wiki/Hospital_Pedi%C3%A1trico_Juan_Pablo_II"
+ },
+ {
+  "qid": "Q97175032",
+  "name": "Hospital de Salud Mental San Francisco de Asís",
+  "types": [
+   "hospital psiquiátrico"
+  ],
+  "lat": -27.459925,
+  "lon": -58.8190121,
+  "article": "https://es.wikipedia.org/wiki/Hospital_de_Salud_Mental_San_Francisco_de_As%C3%ADs"
+ },
+ {
+  "qid": "Q140575745",
+  "name": "Instituto Adventista de Corrientes Ipp-80/ip-25/is-64",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.471224192,
+  "lon": -58.831329686
+ },
+ {
+  "qid": "Q94605081",
+  "name": "Instituto Cardiocentro Srl",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.474945,
+  "lon": -58.829377
+ },
+ {
+  "qid": "Q94605084",
+  "name": "Instituto De Cardiologia Juana Francisca Cabral",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.47259,
+  "lon": -58.835072
+ },
+ {
+  "qid": "Q140575752",
+  "name": "Instituto Monseñor R. Roubineau I.32",
+  "types": [
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.481012856,
+  "lon": -58.830164121
+ },
+ {
+  "qid": "Q140575821",
+  "name": "Instituto Pio Xi I.7",
+  "types": [
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.46815225,
+  "lon": -58.851893949
+ },
+ {
+  "qid": "Q140575867",
+  "name": "Instituto Saint Martin Is-41",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.464278289,
+  "lon": -58.829743495
+ },
+ {
+  "qid": "Q140575827",
+  "name": "Instituto Superior Ntra.Sra.de La Misericordia I.29",
+  "types": [
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.463863726,
+  "lon": -58.842280753
+ },
+ {
+  "qid": "Q5918049",
+  "name": "Instituto de Botánica del Nordeste",
+  "types": [
+   "editor de acceso abierto",
+   "instituto de investigación"
+  ],
+  "lat": -27.4595105,
+  "lon": -58.8237817,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/IBONE.jpg",
+  "article": "https://es.wikipedia.org/wiki/Instituto_de_Bot%C3%A1nica_del_Nordeste"
+ },
+ {
+  "qid": "Q16579156",
+  "name": "Instituto de Cardiología de Corrientes",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.471333333,
+  "lon": -58.834333333,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Instituto%20de%20Cardiolog%C3%ADa%20de%20Corrientes%20%28ICC%29.jpg",
+  "article": "https://es.wikipedia.org/wiki/Instituto_de_Cardiolog%C3%ADa_de_Corrientes"
+ },
+ {
+  "qid": "Q140575770",
+  "name": "Instituto de enseñanza privada Amanecer Ipp.29 / Ip.68",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.46167028,
+  "lon": -58.832552642
+ },
+ {
+  "qid": "Q140575864",
+  "name": "Instituto de enseñanza privada Crea",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.469078889,
+  "lon": -58.837801121
+ },
+ {
+  "qid": "Q140575789",
+  "name": "Instituto de enseñanza privada Mahatma Gandhi",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.472203653,
+  "lon": -58.826546518
+ },
+ {
+  "qid": "Q140575833",
+  "name": "Instituto de enseñanza privada Yapeyú Ls-1",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.462295466,
+  "lon": -58.836599614
+ },
+ {
+  "qid": "Q140575853",
+  "name": "Instituto privado Centro Cultural Correntino Is-26",
+  "types": [
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.4639165,
+  "lon": -58.836996975
+ },
+ {
+  "qid": "Q140575844",
+  "name": "Instituto privado Kid`s School Ipp-25;ip-53;is-55",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.465683214,
+  "lon": -58.843739276
+ },
+ {
+  "qid": "Q140575850",
+  "name": "Instituto privado Mecenas-queluc S.R.L.",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.475477925,
+  "lon": -58.850166967
+ },
+ {
+  "qid": "Q140575872",
+  "name": "Instituto privado Nueva Generacion Ipp.60-ip.73",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela urbana"
+  ],
+  "lat": -27.469157456,
+  "lon": -58.8328516
+ },
+ {
+  "qid": "Q140575838",
+  "name": "Instituto privado San Benito Ip-55 - Is-11",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela secundaria",
+   "escuela urbana"
+  ],
+  "lat": -27.470051018,
+  "lon": -58.843313007
+ },
+ {
+  "qid": "Q140575880",
+  "name": "Jardin de Infantes Los Valijitas E Instituto Los Valijas Ipp-75 / I.P-82",
+  "types": [
+   "escuela primaria",
+   "escuela privada",
+   "escuela urbana"
+  ],
+  "lat": -27.4712257,
+  "lon": -58.8395844
+ },
+ {
+  "qid": "Q123953920",
+  "name": "Monumento al General Bartolomé Mitre y a las Cautivas Correntinas",
+  "types": [
+   "grupo escultórico"
+  ],
+  "lat": -27.457889696,
+  "lon": -58.829022084
+ },
+ {
+  "qid": "Q84522194",
+  "name": "Museo Histórico De Corrientes Tte. De Gdor. Manuel Cabral De Melo Y Alpoin",
+  "types": [
+   "museo"
+  ],
+  "lat": -27.4663,
+  "lon": -58.8387
+ },
+ {
+  "qid": "Q84522218",
+  "name": "Museo Provincial De Bellas Artes Dr. Juan Ramón Vidal",
+  "types": [
+   "museo"
+  ],
+  "lat": -27.4646,
+  "lon": -58.8366
+ },
+ {
+  "qid": "Q84522142",
+  "name": "Museo Provincial De Ciencias Naturales Dr. Amado Bonpland",
+  "types": [
+   "museo"
+  ],
+  "lat": -27.4694,
+  "lon": -58.8414
+ },
+ {
+  "qid": "Q84522172",
+  "name": "Museo Provincial de Artesanías Tradicionales Folklóricas",
+  "types": [
+   "museo de artesanía"
+  ],
+  "lat": -27.46284,
+  "lon": -58.838877
+ },
+ {
+  "qid": "Q21847792",
+  "name": "Parque Mitre",
+  "types": [
+   "parque"
+  ],
+  "lat": -27.46109,
+  "lon": -58.82899
+ },
+ {
+  "qid": "Q21847789",
+  "name": "Plaza Torent",
+  "types": [
+   "parque"
+  ],
+  "lat": -27.47189,
+  "lon": -58.83308
+ },
+ {
+  "qid": "Q5574064",
+  "name": "Puerto de Corrientes",
+  "types": [],
+  "lat": -27.46119444,
+  "lon": -58.83684167,
+  "article": "https://es.wikipedia.org/wiki/Puerto_de_Corrientes"
+ },
+ {
+  "qid": "Q56240649",
+  "name": "Regimiento de Infantería N° 9 (Corrientes)",
+  "types": [
+   "regimiento"
+  ],
+  "lat": -27.473157,
+  "lon": -58.855467
+ },
+ {
+  "qid": "Q94605147",
+  "name": "SAPS Barrio Cichero",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.458549,
+  "lon": -58.820715
+ },
+ {
+  "qid": "Q94605153",
+  "name": "SAPS Barrio Guemez",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.48127,
+  "lon": -58.841332
+ },
+ {
+  "qid": "Q94605254",
+  "name": "SAPS Dr. Miguel Sussini",
+  "types": [
+   "centro de salud"
+  ],
+  "lat": -27.474393,
+  "lon": -58.84744
+ },
+ {
+  "qid": "Q94605103",
+  "name": "Sanatorio Del Norte Srl",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.465622,
+  "lon": -58.833387
+ },
+ {
+  "qid": "Q106614238",
+  "name": "Teatro Juan de Vera",
+  "types": [
+   "estructura arquitectónica desaparecida",
+   "teatro"
+  ],
+  "lat": -27.464666944,
+  "lon": -58.836278055
+ },
+ {
+  "qid": "Q6139923",
+  "name": "Teatro Juan de Vera",
+  "types": [
+   "teatro"
+  ],
+  "lat": -27.464667,
+  "lon": -58.836278,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Teatro%20Juan%20de%20Vera%20%28vista%20frontal%29.JPG",
+  "article": "https://es.wikipedia.org/wiki/Teatro_Vera"
+ },
+ {
+  "qid": "Q16915912",
+  "name": "Templo Santuario de la Cruz del Milagro",
+  "types": [
+   "iglesia"
+  ],
+  "lat": -27.472306,
+  "lon": -58.840167,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Iglesia%20de%20la%20Cruz..jpg",
+  "article": "https://es.wikipedia.org/wiki/Iglesia_de_la_Sant%C3%ADsima_Cruz_de_los_Milagros_(Corrientes)"
+ },
+ {
+  "qid": "Q94605407",
+  "name": "Unidad De Servicios Medicos Srl",
+  "types": [
+   "hospital"
+  ],
+  "lat": -27.475126,
+  "lon": -58.842426
+ },
+ {
+  "qid": "Q5261681",
+  "name": "Universidad Nacional del Nordeste",
+  "types": [
+   "editor de acceso abierto",
+   "universidad pública"
+  ],
+  "lat": -27.4639,
+  "lon": -58.8394,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Vicerectorado%20UNNE%20y%20escultura.jpg",
+  "article": "https://es.wikipedia.org/wiki/Universidad_Nacional_del_Nordeste"
+ },
+ {
+  "qid": "Q2880081",
+  "name": "Universidad de la Cuenca del Plata",
+  "types": [
+   "universidad privada"
+  ],
+  "lat": -27.475115,
+  "lon": -58.852502,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Universidad%20de%20la%20cuenca%20del%20plata.jpg",
+  "article": "https://es.wikipedia.org/wiki/Universidad_de_la_Cuenca_del_Plata"
+ },
+ {
+  "qid": "Q16915910",
+  "name": "iglesia de la Merced",
+  "types": [
+   "iglesia"
+  ],
+  "lat": -27.46394444,
+  "lon": -58.84008333,
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Plaza%2025%20de%20Mayo%20de%20Corrientes-%20Argentina%20la%20Iglesia%20de%20San%20Francisco.JPG",
+  "article": "https://es.wikipedia.org/wiki/Iglesia_de_la_Merced_(Corrientes)"
+ },
+ {
+  "qid": "Q21847790",
+  "name": "parque Camba Cua",
+  "types": [
+   "parque"
+  ],
+  "lat": -27.46516,
+  "lon": -58.84507
+ },
+ {
+  "qid": "Q16576282",
+  "name": "provincia eclesiástica de Corrientes",
+  "types": [
+   "provincia eclesiástica católica"
+  ],
+  "lat": -27.469333,
+  "lon": -58.831361
+ },
+ {
+  "qid": "Q3396551",
+  "name": "puente General Manuel Belgrano",
+  "types": [
+   "puente"
+  ],
+  "lat": -27.470092,
+  "lon": -58.860208,
+  "height": "35",
+  "image": "http://commons.wikimedia.org/wiki/Special:FilePath/Puente%20Belgrano.jpg",
+  "article": "https://es.wikipedia.org/wiki/Puente_General_Manuel_Belgrano"
+ }
+]
