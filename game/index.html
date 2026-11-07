@@ -34,11 +34,17 @@
           clip-path: polygon(50% 0, 62% 36%, 100% 36%, 69% 58%, 81% 96%, 50% 73%, 19% 96%, 31% 58%, 0 36%, 38% 36%); }
   .star.on { background: var(--accent); }
   #wanted.chase .on { animation: blink .5s steps(2) infinite; }
-  #weapon { bottom: 18px; left: 16px; font-size: 12px; line-height: 2; }
+  #weapon { bottom: 62px; left: 16px; font-size: 12px; line-height: 2; }
+  /* firma: logo de Baresand abajo a la izquierda, con link a su página */
+  #baresand { position: fixed; left: 12px; bottom: 10px; z-index: 20; display: block; line-height: 0; padding: 6px 10px;
+              background: rgba(37, 39, 41, .82); border: 1px solid rgba(198, 155, 84, .55); border-radius: 6px; opacity: .85;
+              transition: opacity .2s, border-color .2s; }
+  #baresand:hover, #baresand:focus-visible { opacity: 1; border-color: #c69b54; }
+  #baresand img { height: 30px; width: auto; display: block; }
   #speed { bottom: 18px; left: 50%; transform: translateX(-50%); font-size: 14px; }
   #msg { top: 38%; left: 16px; right: 16px; text-align: center; line-height: 1.4; font-size: clamp(14px, 3.4vw, 40px); color: var(--accent); opacity: 0; transition: opacity .25s; }
   #msg.big { color: var(--red); font-size: clamp(28px, 7vw, 80px); }
-  #hint { bottom: 64px; left: 16px; font-size: 8px; opacity: .7; }
+  #hint { bottom: 108px; left: 16px; font-size: 8px; opacity: .7; }
   #minimap { position: fixed; right: 16px; bottom: 16px; width: 240px; height: 240px; image-rendering: pixelated;
              border: 3px solid #000; outline: 2px solid var(--hud); background: #000; display: none; }
   #bigmap { position: fixed; inset: 0; width: 100vw; height: 100vh; display: none; background: rgba(8,6,12,.92); }
@@ -53,7 +59,7 @@
   #title .credit { font-size: 8px; opacity: .7; }
   @keyframes blink { 50% { opacity: 0; } }
   #credit { position: fixed; left: 50%; bottom: 2px; transform: translateX(-50%); font-family: system-ui, sans-serif; font-size: 10px; opacity: .55; pointer-events: none; }
-  @media (max-width: 640px) { #minimap { width: 120px; height: 120px; } #hint { display: none; } }
+  @media (max-width: 640px) { #minimap { width: 120px; height: 120px; } #hint { display: none; } #baresand img { height: 22px; } #weapon { bottom: 50px; } }
 </style>
 </head>
 <body>
@@ -68,6 +74,7 @@
 <div class="hud" id="msg"></div>
 <canvas id="minimap" width="120" height="120"></canvas>
 <canvas id="bigmap"></canvas>
+<a id="baresand" href="https://www.baresand.tech" target="_blank" rel="noopener" title="Baresand Electronics · baresand.tech"><img src="baresand.svg" alt="Baresand Electronics"></a>
 <div id="credit">Mapa © OpenStreetMap contributors · Edificios © Microsoft (ODbL) · Alturas: Google Open Buildings (CC BY 4.0)</div>
 
 <div id="title">
