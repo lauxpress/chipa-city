@@ -8,7 +8,7 @@ Juego top-down estilo 8 bits sobre el **mapa real de Corrientes** (microcentro, 
 
 ## Jugar
 
-**Online:** https://LAUSC_PAGES_URL/ (GitHub Pages, se actualiza solo con cada push a `main`)
+**Online:** https://lauxpress.github.io/chipa-city/ (GitHub Pages, se actualiza solo con cada push a `main`)
 
 
 - Abrí `game/index.html` con doble clic, **o**
