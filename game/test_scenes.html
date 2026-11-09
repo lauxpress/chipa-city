@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chipa City — prueba de escenas 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #1a1420; color: #f4f0d8; font-family: 'Press Start 2P', monospace; padding: 24px; }
+  h1 { font-size: 16px; color: #f0c030; }
+  button { font: inherit; font-size: 11px; margin: 6px; padding: 10px 14px; background: #2a2230; color: #f4f0d8; border: 2px solid #f0c030; cursor: pointer; box-shadow: 4px 4px 0 #000; }
+  label { font-size: 10px; margin-right: 16px; }
+  input { font: inherit; font-size: 10px; width: 60px; }
+  #log { margin-top: 20px; font-size: 10px; line-height: 2; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Escenas 3D — banco de pruebas</h1>
+<div>
+  <label>Dificultad <input id="dif" type="number" min="1" max="10" value="3"></label>
+  <label>Semilla <input id="seed" type="text" value="corrientes"></label>
+  <label><input id="fps" type="checkbox" checked> FPS</label>
+</div>
+<div id="btns"></div>
+<div id="log"></div>
+<script src="vendor/three.min.js"></script>
+<script>
+  // stub mínimo de window.Chipa
+  window.Chipa = { openModal(o) { console.log('openModal', o); }, closeModal() { console.log('closeModal'); } };
+  window.__scenesCapture = true;
+  window.__scenesShowFps = true;
+</script>
+<script src="scenes.js"></script>
+<script>
+  const log = t => { document.getElementById('log').textContent = t + '\n' + document.getElementById('log').textContent; };
+  for (const s of Chipa.scenes.list) {
+    const b = document.createElement('button'); b.textContent = s.id; b.title = s.name;
+    b.onclick = () => {
+      window.__scenesShowFps = document.getElementById('fps').checked;
+      const opts = { difficulty: +document.getElementById('dif').value, seed: document.getElementById('seed').value };
+      Chipa.scenes.play(s.id, opts).then(r => log(s.id + ' → ' + JSON.stringify(r)));
+    };
+    document.getElementById('btns').appendChild(b);
+  }
+  // captura: renderiza y manda el PNG al servidor local de capturas
+  window.__shot = async (name) => {
+    const c = document.querySelector('.cs3d-gl'); if (!c) return 'sin escena';
+    const url = c.toDataURL('image/png');
+    const r = await fetch('http://127.0.0.1:8767/' + (name || 'shot'), { method: 'POST', body: url });
+    return await r.text();
+  };
+  // abre una escena, avanza n pasos y captura (funciona con la pestaña en segundo plano)
+  window.__go = async (id, o, name, steps = 90) => {
+    Chipa.scenes.play(id, o).then(r => { window.__res = r; log(id + ' → ' + JSON.stringify(r)); });
+    await new Promise(r => setTimeout(r, 1200));
+    __scenesCur.debugStep(steps); return name ? await __shot(name) : 'ok';
+  };
+  window.__key = (code, frames = 20, after = 25) => {
+    const s = __scenesCur; window.dispatchEvent(new KeyboardEvent('keydown', { code }));
+    s.debugStep(frames); window.dispatchEvent(new KeyboardEvent('keyup', { code })); s.debugStep(after);
+  };
+</script>
+</body>
+</html>

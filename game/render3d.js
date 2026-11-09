@@ -10,10 +10,179 @@ window.createRender3D = function (G) {
   } catch (e) { console.warn('WebGL no disponible, sigo en 2D', e); return null; }
   renderer.setClearColor(0x2a5aa8, 1);
   renderer.outputEncoding = T.LinearEncoding;
+  renderer.setPixelRatio(1);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
   const scene = new T.Scene();
   const FOV = 32, TAN = Math.tan(FOV / 2 * Math.PI / 180);
   const camera = new T.PerspectiveCamera(FOV, 1, 4, 9000);
   camera.up.set(0, 1, 0);
+  const GL2 = renderer.capabilities.isWebGL2;
+
+  // ------------------------------------------------------------ luz: tarde dorada correntina
+  // El sol baja por el noroeste (hemisferio sur): las sombras caen hacia el sureste, como en el 2D.
+  // Todo en coordenadas de Three: x = este, y = norte, z = arriba (el mundo 2D tiene la y hacia el sur).
+  const LIGHT = {
+    el: 34 * Math.PI / 180, az: 128 * Math.PI / 180,     // elevación y acimut (desde el este, antihorario)
+    sun: new T.Color(1.0, 0.82, 0.6), sunI: 1.25,
+    sky: new T.Color(0.62, 0.72, 0.92), ground: new T.Color(0.52, 0.44, 0.34), hemiI: 0.78,
+    fog: new T.Color(0.98, 0.8, 0.62), fogMax: 0.16, fogH: 70,
+  };
+  const SUNDIR = new T.Vector3(Math.cos(LIGHT.el) * Math.cos(LIGHT.az), Math.cos(LIGHT.el) * Math.sin(LIGHT.az), Math.sin(LIGHT.el)).normalize();
+  const sun = new T.DirectionalLight(LIGHT.sun, LIGHT.sunI);
+  sun.castShadow = true;
+  const SHADOW_RES = 2048;
+  sun.shadow.mapSize.set(SHADOW_RES, SHADOW_RES);
+  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.5;
+  sun.shadow.camera.near = 1; sun.shadow.camera.far = 6000;
+  scene.add(sun); scene.add(sun.target);
+  const hemi = new T.HemisphereLight(LIGHT.sky, LIGHT.ground, LIGHT.hemiI);
+  hemi.position.set(0, 0, 1); scene.add(hemi);
+  const _v = new T.Vector3(), _r = new T.Vector3(), _u = new T.Vector3();
+  // La cámara de sombras sigue a la vista: cubre solo lo visible (más lo que puede tirar sombra adentro)
+  // y se mueve de a un texel para que los bordes no "titilen" al andar.
+  function aimSun(cx, cy, gw, gh, maxH) {
+    const D = 3000, sc = sun.shadow.camera;
+    sun.target.position.set(cx, cy, 0); sun.position.set(cx + SUNDIR.x * D, cy + SUNDIR.y * D, SUNDIR.z * D);
+    sc.position.copy(sun.position); sc.lookAt(sun.target.position); sc.updateMatrixWorld(true);
+    const inv = sc.matrixWorldInverse;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const dx of [-0.5, 0.5]) for (const dy of [-0.5, 0.5]) for (const z of [0, maxH]) {
+      _v.set(cx + dx * gw, cy + dy * gh, z).applyMatrix4(inv);
+      x0 = Math.min(x0, _v.x); x1 = Math.max(x1, _v.x); y0 = Math.min(y0, _v.y); y1 = Math.max(y1, _v.y);
+    }
+    // tamaño cuantizado (para que el texel no cambie cuadro a cuadro) y centro pegado a la grilla de texels
+    const q = 128, hw = Math.ceil((x1 - x0) / 2 / q) * q + 16, hh = Math.ceil((y1 - y0) / 2 / q) * q + 16;
+    const tx = 2 * hw / SHADOW_RES, ty = 2 * hh / SHADOW_RES;
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, sx = Math.round(mx / tx) * tx, sy = Math.round(my / ty) * ty;
+    sc.left = sx - hw; sc.right = sx + hw; sc.bottom = sy - hh; sc.top = sy + hh;
+    sc.updateProjectionMatrix();
+  }
+
+  // ------------------------------------------------------------ post-proceso propio (sin EffectComposer)
+  // escena -> target de baja resolución (pixel nítido) -> neblina + nubes + luz volumétrica + bloom + gradación -> pantalla
+  const RT_TYPE = GL2 ? T.HalfFloatType : T.UnsignedByteType;
+  const POST = { pixel: 0, bloom: 0.55, vol: 0.22, clouds: 0.2, vignette: 0.32, exposure: 1.0, enabled: true };
+  function rt(w, h, nearestF) {
+    const f = nearestF ? T.NearestFilter : T.LinearFilter;
+    return new T.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), { minFilter: f, magFilter: f, type: RT_TYPE, depthBuffer: false, stencilBuffer: false });
+  }
+  let rtScene = null, rtVol = null, rtB = [], devW = 1, devH = 1, inW = 1, inH = 1, pixK = 1;
+  function makeTargets() {
+    for (const r of [rtScene, rtVol, ...rtB]) if (r) r.dispose();
+    rtScene = new T.WebGLRenderTarget(inW, inH, { minFilter: T.NearestFilter, magFilter: T.NearestFilter, type: RT_TYPE, stencilBuffer: false });
+    rtScene.depthTexture = new T.DepthTexture(inW, inH);
+    rtScene.depthTexture.type = T.UnsignedIntType;
+    rtVol = rt(inW >> 1, inH >> 1);
+    rtB = [rt(inW >> 1, inH >> 1), rt(inW >> 2, inH >> 2), rt(inW >> 2, inH >> 2), rt(inW >> 3, inH >> 3), rt(inW >> 3, inH >> 3)];
+  }
+  const fsScene = new T.Scene(), fsCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const fsGeo = new T.BufferGeometry();
+  fsGeo.setAttribute('position', new T.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+  const fsMesh = new T.Mesh(fsGeo, null); fsMesh.frustumCulled = false; fsScene.add(fsMesh);
+  const FS_VERT = 'varying vec2 vUv; void main(){ vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+  const fsMat = (frag, uniforms) => new T.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false });
+  function pass(mat, target) { fsMesh.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); }
+  // utilidades GLSL compartidas: ruido, reconstrucción de la posición y consulta del mapa de sombras del sol
+  const GLSL_COMMON = `
+    #include <packing>
+    uniform sampler2D uShadowMap; uniform mat4 uShadowMatrix; uniform float uHasShadow;
+    uniform vec3 uSunDir; uniform float uTime;
+    float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+    float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y); }
+    float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+    float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+    float sunVis(vec3 wp) {
+      if (uHasShadow < 0.5) return 1.0;
+      vec4 sc = uShadowMatrix * vec4(wp, 1.0); vec3 c = sc.xyz / sc.w;
+      if (c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z > 1.0) return 1.0;
+      return step(c.z - 0.0015, unpackRGBAToDepth(texture2D(uShadowMap, c.xy)));
+    }`;
+  const shadowUniforms = () => ({ uShadowMap: { value: null }, uShadowMatrix: { value: sun.shadow.matrix }, uHasShadow: { value: 0 }, uSunDir: { value: SUNDIR }, uTime: { value: 0 } });
+  const camUniforms = () => ({ tDepth: { value: null }, uNear: { value: 4 }, uFar: { value: 9000 }, uTanY: { value: TAN }, uAspect: { value: 1 }, uCamPos: { value: new T.Vector3() } });
+  const GLSL_WPOS = `
+    uniform sampler2D tDepth; uniform float uNear, uFar, uTanY, uAspect; uniform vec3 uCamPos;
+    vec3 worldAt(vec2 uv, out float vz) {
+      float d = texture2D(tDepth, uv).x;
+      vz = -perspectiveDepthToViewZ(d, uNear, uFar);
+      vec2 ndc = uv * 2.0 - 1.0;
+      return vec3(uCamPos.x + ndc.x * vz * uTanY * uAspect, uCamPos.y + ndc.y * vz * uTanY, uCamPos.z - vz);
+    }`;
+  // luz volumétrica: la neblina baja (los primeros ~35 m) se ilumina donde le da el sol y queda oscura en la sombra de los edificios
+  const volMat = fsMat(`
+    varying vec2 vUv; ${GLSL_COMMON} ${GLSL_WPOS}
+    uniform vec3 uVolCol; uniform float uFogH, uTop; uniform float uFrame;
+    void main() {
+      float vz; vec3 wp = worldAt(vUv, vz);
+      if (wp.z >= uTop) { gl_FragColor = vec4(0.0); return; }
+      vec3 ro = uCamPos, rd = wp - ro;
+      float t0 = clamp((ro.z - uTop) / max(1.0, ro.z - wp.z), 0.0, 1.0);
+      float j = ign(gl_FragCoord.xy + uFrame * 5.588238), acc = 0.0;
+      const int N = 10;
+      for (int i = 0; i < N; i++) {
+        vec3 p = ro + rd * mix(t0, 1.0, (float(i) + j) / float(N));
+        acc += sunVis(p) * exp(-max(p.z, 0.0) / uFogH);
+      }
+      float len = (uTop - max(wp.z, 0.0)) / uTop;
+      gl_FragColor = vec4(uVolCol * (acc / float(N)) * len, 1.0);
+    }`, { ...shadowUniforms(), ...camUniforms(), uVolCol: { value: new T.Color() }, uFogH: { value: LIGHT.fogH }, uTop: { value: 130 }, uFrame: { value: 0 } });
+  // bloom: brillo -> mitad -> cuarto -> octavo, con desenfoque separable
+  const brightMat = fsMat(`
+    varying vec2 vUv; uniform sampler2D tSrc; uniform vec2 uTexel; uniform float uThr;
+    void main() {
+      vec3 c = texture2D(tSrc, vUv + uTexel * vec2(-0.5, -0.5)).rgb + texture2D(tSrc, vUv + uTexel * vec2(0.5, -0.5)).rgb
+             + texture2D(tSrc, vUv + uTexel * vec2(-0.5, 0.5)).rgb + texture2D(tSrc, vUv + uTexel * vec2(0.5, 0.5)).rgb;
+      c *= 0.25;
+      float l = max(c.r, max(c.g, c.b)), k = max(0.0, l - uThr); k = k * k / (k + 0.25);
+      gl_FragColor = vec4(c * (k / max(l, 1e-4)), 1.0);
+    }`, { tSrc: { value: null }, uTexel: { value: new T.Vector2() }, uThr: { value: 0.82 } });
+  const copyMat = fsMat(`varying vec2 vUv; uniform sampler2D tSrc; uniform vec2 uTexel;
+    void main() { gl_FragColor = 0.25 * (texture2D(tSrc, vUv + uTexel * vec2(-1.0, -1.0)) + texture2D(tSrc, vUv + uTexel * vec2(1.0, -1.0)) + texture2D(tSrc, vUv + uTexel * vec2(-1.0, 1.0)) + texture2D(tSrc, vUv + uTexel * vec2(1.0, 1.0))); }`,
+    { tSrc: { value: null }, uTexel: { value: new T.Vector2() } });
+  const blurMat = fsMat(`varying vec2 vUv; uniform sampler2D tSrc; uniform vec2 uDir;
+    void main() {
+      vec4 s = texture2D(tSrc, vUv) * 0.2270270270;
+      s += (texture2D(tSrc, vUv + uDir * 1.3846153846) + texture2D(tSrc, vUv - uDir * 1.3846153846)) * 0.3162162162;
+      s += (texture2D(tSrc, vUv + uDir * 3.2307692308) + texture2D(tSrc, vUv - uDir * 3.2307692308)) * 0.0702702703;
+      gl_FragColor = s;
+    }`, { tSrc: { value: null }, uDir: { value: new T.Vector2() } });
+  const finalMat = fsMat(`
+    varying vec2 vUv; ${GLSL_COMMON} ${GLSL_WPOS}
+    uniform sampler2D tScene, tVol, tB1, tB2; uniform vec2 uIn; uniform float uPix;
+    uniform vec3 uFogCol; uniform float uFogMax, uFogH, uBloom, uClouds, uVig, uExp, uVolOn;
+    void main() {
+      vec2 ip = floor(gl_FragCoord.xy / uPix) + 0.5, uv = ip / uIn;
+      vec3 col = texture2D(tScene, uv).rgb;
+      float vz; vec3 wp = worldAt(uv, vz);
+      float h = clamp(wp.z, 0.0, 2000.0);
+      // sombras de nubes que pasan (solo donde pega el sol)
+      if (uClouds > 0.0) {
+        vec2 cp = (wp.xy + uSunDir.xy / uSunDir.z * (900.0 - h)) * 0.0011 + vec2(uTime * 0.012, uTime * 0.005);
+        float cl = smoothstep(0.5, 0.78, fbm(cp));
+        col *= 1.0 - uClouds * cl * sunVis(wp);
+      }
+      // neblina de altura: el suelo queda un poco velado, las terrazas altas se despegan
+      float fog = uFogMax * exp(-h / uFogH);
+      col = mix(col, uFogCol * (0.75 + 0.25 * col), fog);
+      col += texture2D(tVol, uv).rgb * uVolOn;
+      col += (texture2D(tB1, vUv).rgb * 0.7 + texture2D(tB2, vUv).rgb * 0.9) * uBloom;
+      // gradación: hombro suave, cálido en las luces y apenas verde-azulado en las sombras
+      col *= uExp;
+      col = mix(col, 0.8 + 0.2 * (1.0 - exp(-(col - 0.8) / 0.2)), step(0.8, col));
+      float l = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(vec3(l), col, 1.12);
+      col *= mix(vec3(0.94, 0.99, 1.06), vec3(1.05, 1.0, 0.92), smoothstep(0.15, 0.75, l));
+      col = col * col * (3.0 - 2.0 * col) * 0.22 + col * 0.78;
+      vec2 q = vUv - 0.5; q.x *= uIn.x / uIn.y * 0.75;
+      col *= 1.0 - uVig * smoothstep(0.25, 0.85, length(q));
+      col += (ign(gl_FragCoord.xy) - 0.5) / 255.0;
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+    }`, { ...shadowUniforms(), ...camUniforms(), tScene: { value: null }, tVol: { value: null }, tB1: { value: null }, tB2: { value: null },
+    uIn: { value: new T.Vector2(1, 1) }, uPix: { value: 1 }, uFogCol: { value: LIGHT.fog }, uFogMax: { value: LIGHT.fogMax }, uFogH: { value: LIGHT.fogH },
+    uBloom: { value: POST.bloom }, uClouds: { value: POST.clouds }, uVig: { value: POST.vignette }, uExp: { value: POST.exposure }, uVolOn: { value: 1 } });
+  const SHADOW_USERS = [volMat, finalMat];
+  let tNow = 0;
   const { TS, CPX, FLOOR } = G, TT = G.T;
   const KEY = (cx, cy) => cy * 4096 + cx;
   const nearest = t => { t.magFilter = T.NearestFilter; t.minFilter = T.NearestFilter; t.generateMipmaps = false; return t; };
@@ -88,10 +257,10 @@ window.createRender3D = function (G) {
   });
   const rep = c => { const t = nearest(new T.CanvasTexture(c)); t.wrapS = t.wrapT = T.RepeatWrapping; return t; };
   const mats = {};
-  const facMat = k => mats[k] || (mats[k] = new T.MeshBasicMaterial({ map: rep(FAC[k].c), vertexColors: true, side: T.DoubleSide }));
-  const roofMat = k => mats['r_' + k] || (mats['r_' + k] = new T.MeshBasicMaterial({ map: rep(ROOFTEX[k]), vertexColors: true, side: T.DoubleSide }));
-  const plainMat = new T.MeshBasicMaterial({ vertexColors: true, side: T.DoubleSide });
-  const deckMat = new T.MeshBasicMaterial({ map: rep(DECK), side: T.DoubleSide });
+  const facMat = k => mats[k] || (mats[k] = new T.MeshLambertMaterial({ map: rep(FAC[k].c), vertexColors: true, side: T.DoubleSide }));
+  const roofMat = k => mats['r_' + k] || (mats['r_' + k] = new T.MeshLambertMaterial({ map: rep(ROOFTEX[k]), vertexColors: true, side: T.DoubleSide }));
+  const plainMat = new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide });
+  const deckMat = new T.MeshLambertMaterial({ map: rep(DECK), side: T.DoubleSide });
   const lineMat = new T.LineBasicMaterial({ vertexColors: true });
   const groundShadowMat = new T.MeshBasicMaterial({ color: 0x0a0018, transparent: true, opacity: 0.32, depthWrite: false, side: T.DoubleSide });
 
@@ -123,8 +292,11 @@ window.createRender3D = function (G) {
     geo.setAttribute('position', new T.Float32BufferAttribute(g.pos, 3));
     geo.setAttribute('uv', new T.Float32BufferAttribute(g.uv, 2));
     geo.setAttribute('color', new T.Float32BufferAttribute(g.col, 3));
+    geo.computeVertexNormals(); // sin índices: normal plana por triángulo (look facetado)
     geo.computeBoundingSphere();
-    const m = new T.Mesh(geo, mat); m.matrixAutoUpdate = false; m.updateMatrix(); return m;
+    const m = new T.Mesh(geo, mat); m.matrixAutoUpdate = false; m.updateMatrix();
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
   }
   function toLines(l) {
     const geo = new T.BufferGeometry();
@@ -246,7 +418,7 @@ window.createRender3D = function (G) {
     });
   }
   const lmMats = {};
-  const lmMat = name => lmMats[name] || (lmMats[name] = new T.MeshBasicMaterial({ map: rep(lmFacade(LM[name])), vertexColors: true, side: T.DoubleSide }));
+  const lmMat = name => lmMats[name] || (lmMats[name] = new T.MeshLambertMaterial({ map: rep(lmFacade(LM[name])), vertexColors: true, side: T.DoubleSide }));
   function obbOf(bd) { // rectángulo orientado mínimo que contiene al edificio
     const p = bd.pts, n = bd.n; let best = null;
     for (let k = 0, j = n - 1; k < n; j = k++) {
@@ -683,7 +855,7 @@ window.createRender3D = function (G) {
     }
     if (gd.pos.length) bridgeGroup.add(toMesh(gd, deckMat));
     if (gp.pos.length) bridgeGroup.add(toMesh(gp, plainMat));
-    if (gs.pos.length) { const m = toMesh(gs, groundShadowMat); m.renderOrder = 1; bridgeGroup.add(m); }
+    // (las sombras falsas pintadas en el agua ya no hacen falta: ahora las tira el sol)
     if (cables.pos.length) bridgeGroup.add(toLines(cables));
   })();
 
@@ -699,7 +871,7 @@ window.createRender3D = function (G) {
       g.fillRect(ax - 1, ay, 3, 5); g.fillRect(ax - 4, ay + 5, 9, 1); g.fillRect(ax - 3, ay + 6, 7, 1); g.fillRect(ax - 2, ay + 7, 5, 1); g.fillRect(ax - 1, ay + 8, 3, 1);
     });
   }
-  const signMat = c => new T.MeshBasicMaterial({ map: nearest(new T.CanvasTexture(c)), side: T.DoubleSide });
+  const signMat = c => new T.MeshLambertMaterial({ map: nearest(new T.CanvasTexture(c)), side: T.DoubleSide });
   function panel(group, mat, cx, cy, ux, uy, nx, ny, w, ztop, depth, drop) {
     const g = Geo(), wh = w / 2;
     quad4(g, [cx - nx * wh - ux * depth, cy - ny * wh - uy * depth, ztop - drop], [cx + nx * wh - ux * depth, cy + ny * wh - uy * depth, ztop - drop],
@@ -809,27 +981,34 @@ window.createRender3D = function (G) {
       pyramid(gp, x, y, 1, 0, r * 0.9, H + 4 * MPXp, H + 5.5 * MPXp, mul(w, 0.9));
     }
     if (gp.pos.length) scene.add(toMesh(gp, plainMat));
-    if (gs.pos.length) { const m = toMesh(gs, groundShadowMat); m.renderOrder = 1; scene.add(m); }
   })();
 
   // ------------------------------------------------------------ sprites (autos, peatones) y capa de efectos
+  // Los sprites van a la altura del techo del auto / la cabeza del peatón; debajo, una caja invisible
+  // que solo existe para el mapa de sombras: así cada auto y cada peatón tira su sombra con el sol.
   const sprMats = new Map();
   function sprMat(c) {
     let m = sprMats.get(c);
-    if (!m) { m = new T.MeshBasicMaterial({ map: nearest(new T.CanvasTexture(c)), alphaTest: 0.5 }); sprMats.set(c, m); }
+    if (!m) { m = new T.MeshLambertMaterial({ map: nearest(new T.CanvasTexture(c)), alphaTest: 0.5 }); sprMats.set(c, m); }
     return m;
   }
-  const shadowMat = new T.MeshBasicMaterial({ color: 0x000010, transparent: true, opacity: 0.38, depthWrite: false });
-  function pool(mat) {
+  const shadowMat = new T.MeshBasicMaterial({ color: 0x000010, transparent: true, opacity: 0.26, depthWrite: false });
+  const casterMat = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  const casterGeo = new T.BoxGeometry(1, 1, 1); casterGeo.translate(0, 0, 0.5);
+  function pool(mat, geo, opts) {
     const arr = []; let used = 0;
     return {
       reset() { used = 0; },
-      get(m) { if (used >= arr.length) { const o = new T.Mesh(unitPlane, mat); scene.add(o); arr.push(o); } const o = arr[used++]; o.visible = true; if (m) o.material = m; return o; },
+      get(m) {
+        if (used >= arr.length) { const o = new T.Mesh(geo || unitPlane, mat); Object.assign(o, opts || {}); scene.add(o); arr.push(o); }
+        const o = arr[used++]; o.visible = true; if (m) o.material = m; return o;
+      },
       finish() { for (let i = used; i < arr.length; i++) arr[i].visible = false; },
     };
   }
-  const sprites = pool(null), shadows = pool(shadowMat);
+  const sprites = pool(null, null, { receiveShadow: true }), shadows = pool(shadowMat), casters = pool(casterMat, casterGeo, { castShadow: true, renderOrder: -1 });
   function place(o, x, y, z, a, w, h) { o.position.set(x, -y, z); o.rotation.set(0, 0, -a - Math.PI / 2); o.scale.set(w, h, 1); }
+  function caster(x, y, z, a, l, w, h) { const o = casters.get(); o.position.set(x, -y, z); o.rotation.set(0, 0, -a); o.scale.set(l, w, h); }
   let fxTex = null, fxMesh = null;
   function makeFx() {
     if (fxMesh) { scene.remove(fxMesh); fxMesh.material.dispose(); fxTex.dispose(); }
@@ -840,9 +1019,22 @@ window.createRender3D = function (G) {
 
   // ------------------------------------------------------------ cuadro
   let iw = 400, ih = 300;
-  function resize(w, h) { iw = w; ih = h; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); makeFx(); }
+  function resize(w, h) {
+    iw = w; ih = h;
+    const dpr = window.devicePixelRatio || 1;
+    devW = Math.max(1, Math.floor(innerWidth * dpr)); devH = Math.max(1, Math.floor(innerHeight * dpr));
+    // tamaño del pixel: entero (pantalla / pixel interno), apuntando a ~500-720 líneas de alto
+    pixK = POST.pixel > 0 ? POST.pixel : Math.max(1, Math.floor(devH / 500));
+    if (!POST.enabled) pixK = 1;
+    inW = Math.ceil(devW / pixK); inH = Math.ceil(devH / pixK);
+    renderer.setSize(devW, devH, false);
+    camera.aspect = devW / devH; camera.updateProjectionMatrix();
+    makeTargets(); makeFx();
+  }
+  const CAR_H = 1.5 * FLOOR / 3, PED_H = 1.7 * FLOOR / 3;
   function render() {
     frame++; builtBlocks = 0;
+    tNow = performance.now() / 1000;
     const cam = G.cam, player = G.player, zoom = cam.zoom, view = G.view;
     view.w = iw / zoom; view.h = ih / zoom; view.scale = G.baseScale * zoom;
     const baseZ = (player.car ? player.car.z : player.z) || 0;
@@ -850,8 +1042,9 @@ window.createRender3D = function (G) {
     const sh = G.shake() > 0 ? G.shake() * 8 : 0;
     const cx = cam.x + (sh ? (Math.random() * 2 - 1) * sh : 0), cy = cam.y + (sh ? (Math.random() * 2 - 1) * sh : 0);
     camera.position.set(cx, -cy, camH); camera.lookAt(cx, -cy, 0);
+    camera.far = camH + 200; camera.updateProjectionMatrix();
     // zona visible a nivel del suelo (más un margen: los edificios altos se "inclinan" hacia adentro)
-    const k = camH / Math.max(1, camH - baseZ), gw = view.w * k, gh = view.h * k;
+    const k = camH / Math.max(1, camH - baseZ), gw = view.w * k * (devW / devH) / (iw / ih), gh = view.h * k;
     const gx0 = cx - gw / 2, gy0 = cy - gh / 2;
     for (const c of G.chunks.values()) if (c.mesh) c.mesh.visible = false;
     const c0x = Math.floor((gx0 - 32) / CPX), c1x = Math.floor((gx0 + gw + 32) / CPX), c0y = Math.floor((gy0 - 32) / CPX), c1y = Math.floor((gy0 + gh + 32) / CPX);
@@ -859,9 +1052,10 @@ window.createRender3D = function (G) {
       if (!G.inMap(x, y)) continue;
       const c = G.getChunk(x, y);
       if (!c.mesh) {
-        c.tex = nearest(new T.CanvasTexture(c.cv));
-        c.mesh = new T.Mesh(unitPlane, new T.MeshBasicMaterial({ map: c.tex }));
+        c.tex = groundTex(c.cv);
+        c.mesh = new T.Mesh(unitPlane, new T.MeshLambertMaterial({ map: c.tex }));
         c.mesh.position.set(x * CPX + CPX / 2, -(y * CPX + CPX / 2), 0); c.mesh.scale.set(CPX, CPX, 1);
+        c.mesh.receiveShadow = true;
         c.mesh.matrixAutoUpdate = false; c.mesh.updateMatrix(); scene.add(c.mesh);
       }
       if (c.dirty) { c.tex.needsUpdate = true; c.dirty = false; }
@@ -877,26 +1071,29 @@ window.createRender3D = function (G) {
     order.sort((a, b) => a[2] - b[2]);
     for (const [x, y] of order) getBlock(x, y);
     // autos y peatones
-    sprites.reset(); shadows.reset();
+    sprites.reset(); shadows.reset(); casters.reset();
     const vis = (x, y) => x > gx0 - 40 && y > gy0 - 40 && x < gx0 + gw + 40 && y < gy0 + gh + 40;
     const flash = (G.frameNo() >> 3) & 1;
     for (const c of G.cars) {
       if (!vis(c.x, c.y)) continue;
-      const z = c.z || 0;
-      place(shadows.get(), c.x + 2, c.y + 3, z + 0.5, c.a, c.w, c.l);
+      const z = c.z || 0, tall = c.l > 30 ? 2.2 : 1; // colectivos y camiones más altos
+      place(shadows.get(), c.x, c.y, z + 0.3, c.a, c.w + 1.5, c.l + 1.5);
+      caster(c.x, c.y, z, c.a, c.l - 1, c.w - 1, CAR_H * tall - 0.4);
       const siren = c.cop && !c.wreck && (c.mode === 'cop' || c === player.car);
-      place(sprites.get(sprMat(siren && flash ? c.sprB : c.spr)), c.x, c.y, z + 1.4, c.a, c.w, c.l);
+      place(sprites.get(sprMat(siren && flash ? c.sprB : c.spr)), c.x, c.y, z + CAR_H * tall, c.a, c.w, c.l);
     }
     for (const p of G.peds) {
       if (!vis(p.x, p.y)) continue;
       const img = p.dead ? p.spr.dead : p.spr.frames[Math.floor(p.anim) % 4];
-      place(sprites.get(sprMat(img)), p.x, p.y, (p.z || 0) + (p.dead ? 0.7 : 1.1), p.a, img.width, img.height);
+      if (!p.dead) caster(p.x, p.y, p.z || 0, p.a, 2.2, 2.6, PED_H - 0.4);
+      place(sprites.get(sprMat(img)), p.x, p.y, (p.z || 0) + (p.dead ? 0.7 : PED_H), p.a, img.width, img.height);
     }
     if (!player.car) {
       const img = player.dead && !player.busted ? player.spr.dead : player.spr.frames[Math.floor(player.anim) % 4];
-      place(sprites.get(sprMat(img)), player.x, player.y, (player.z || 0) + 1.2, player.a, img.width, img.height);
+      if (!player.dead) caster(player.x, player.y, player.z || 0, player.a, 2.2, 2.6, PED_H - 0.4);
+      place(sprites.get(sprMat(img)), player.x, player.y, (player.z || 0) + (player.dead ? 0.8 : PED_H + 0.1), player.a, img.width, img.height);
     }
-    sprites.finish(); shadows.finish();
+    sprites.finish(); shadows.finish(); casters.finish();
     // efectos (balas, partículas, pickups) en una capa 2D a la altura del jugador
     const bw = Math.min(G.fxCanvas.width, Math.ceil(view.w) + 1), bh = Math.min(G.fxCanvas.height, Math.ceil(view.h) + 1);
     const ox = Math.round(cx - view.w / 2), oy = Math.round(cy - view.h / 2);
@@ -904,12 +1101,54 @@ window.createRender3D = function (G) {
     fxTex.needsUpdate = true;
     fxTex.repeat.set(bw / G.fxCanvas.width, bh / G.fxCanvas.height);
     fxTex.offset.set(0, 1 - bh / G.fxCanvas.height);
-    fxMesh.position.set(ox + bw / 2, -(oy + bh / 2), baseZ + 0.9); fxMesh.scale.set(bw, bh, 1);
-    renderer.render(scene, camera);
+    fxMesh.position.set(ox + bw / 2, -(oy + bh / 2), baseZ + 6.5); fxMesh.scale.set(bw, bh, 1);
+    updateWorld(cx, cy, gw, gh, camH);
+    // sombras: la cámara del sol cubre lo visible (con margen por los edificios altos)
+    aimSun(cx, -cy, gw + 80, gh + 80, 160);
+    if (!POST.enabled) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+    renderer.setRenderTarget(rtScene); renderer.render(scene, camera);
+    post(camH);
   }
+  function post(camH) {
+    const sm = sun.shadow.map ? sun.shadow.map.texture : null;
+    for (const m of SHADOW_USERS) { const u = m.uniforms; u.uShadowMap.value = sm; u.uHasShadow.value = sm ? 1 : 0; u.uTime.value = tNow; }
+    for (const m of [volMat, finalMat]) {
+      const u = m.uniforms; u.tDepth.value = rtScene.depthTexture; u.uNear.value = camera.near; u.uFar.value = camera.far;
+      u.uAspect.value = camera.aspect; u.uCamPos.value.copy(camera.position);
+    }
+    // luz volumétrica (a media resolución)
+    volMat.uniforms.uVolCol.value.copy(LIGHT.sun).multiplyScalar(POST.vol);
+    volMat.uniforms.uFrame.value = frame % 64;
+    if (POST.vol > 0) pass(volMat, rtVol);
+    // bloom
+    brightMat.uniforms.tSrc.value = rtScene.texture; brightMat.uniforms.uTexel.value.set(1 / inW, 1 / inH);
+    pass(brightMat, rtB[0]);
+    copyMat.uniforms.tSrc.value = rtB[0].texture; copyMat.uniforms.uTexel.value.set(0.5 / rtB[0].width, 0.5 / rtB[0].height);
+    pass(copyMat, rtB[1]);
+    blurMat.uniforms.tSrc.value = rtB[1].texture; blurMat.uniforms.uDir.value.set(1 / rtB[1].width, 0); pass(blurMat, rtB[2]);
+    blurMat.uniforms.tSrc.value = rtB[2].texture; blurMat.uniforms.uDir.value.set(0, 1 / rtB[1].height); pass(blurMat, rtB[1]);
+    copyMat.uniforms.tSrc.value = rtB[1].texture; copyMat.uniforms.uTexel.value.set(0.5 / rtB[1].width, 0.5 / rtB[1].height);
+    pass(copyMat, rtB[3]);
+    blurMat.uniforms.tSrc.value = rtB[3].texture; blurMat.uniforms.uDir.value.set(1 / rtB[3].width, 0); pass(blurMat, rtB[4]);
+    blurMat.uniforms.tSrc.value = rtB[4].texture; blurMat.uniforms.uDir.value.set(0, 1 / rtB[3].height); pass(blurMat, rtB[3]);
+    const u = finalMat.uniforms;
+    u.tScene.value = rtScene.texture; u.tVol.value = rtVol.texture; u.tB1.value = rtB[1].texture; u.tB2.value = rtB[3].texture;
+    u.uIn.value.set(inW, inH); u.uPix.value = pixK; u.uBloom.value = POST.bloom; u.uClouds.value = POST.clouds; u.uVig.value = POST.vignette;
+    u.uExp.value = POST.exposure; u.uVolOn.value = POST.vol > 0 ? 1 : 0;
+    pass(finalMat, null);
+  }
+  // texturas del piso: pixel nítido de cerca, mipmaps al alejarse (si no, el asfalto "hierve")
+  function groundTex(cv) {
+    const t = new T.CanvasTexture(cv);
+    t.magFilter = T.NearestFilter;
+    if (GL2) { t.minFilter = T.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); }
+    else { t.minFilter = T.LinearFilter; t.generateMipmaps = false; }
+    return t;
+  }
+  function updateWorld() { /* agua, vegetación y marcadores: más abajo */ }
   function evict(c) {
     if (!c.mesh) return;
     scene.remove(c.mesh); c.mesh.material.dispose(); c.tex.dispose(); c.mesh = null; c.tex = null;
   }
-  return { render, resize, evict, info: () => renderer.info };
+  return { render, resize, evict, info: () => renderer.info, POST, LIGHT, sun, renderer, scene, camera };
 };

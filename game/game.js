@@ -178,6 +178,71 @@ TEX[T_YARD] = variants(10, '#4f7a42', (x, y, r, i) => {
   if (i === 3 && (x * 7 + y * 3) % 11 < 5) return v < 0.3 ? [112, 92, 66] : [128, 106, 76]; // tierra
   return v < 0.12 ? [90, 136, 72] : v < 0.22 ? [68, 102, 56] : v < 0.24 ? [128, 106, 76] : null;
 });
+// ---- Piso en alta: en 3D los chunks se dibujan a GS× (24 px por tile ≈ 10,7 px por metro) con texturas propias
+const GS = USE3D ? 2 : 1, TT = TS * GS;
+const TEXD = []; // píxeles de cada textura (para el pase de bordes suaves)
+if (GS > 1) {
+  const texN = (seed, fn) => {
+    const [c, g] = canvas(TT, TT), id = g.createImageData(TT, TT), r = rng(seed);
+    for (let y = 0; y < TT; y++) for (let x = 0; x < TT; x++) {
+      const col = fn(x, y, r), i = (y * TT + x) * 4;
+      id.data[i] = col[0]; id.data[i + 1] = col[1]; id.data[i + 2] = col[2]; id.data[i + 3] = 255;
+    }
+    g.putImageData(id, 0, 0); return c;
+  };
+  const vars = (seed, fn) => [...Array(V)].map((_, i) => texN(seed + i * 17, (x, y, r) => fn(x, y, r, i)));
+  const sh = (c, k) => [c[0] + k, c[1] + k, c[2] + k];
+  // asfalto: árido claro, poros oscuros y manchones grandes apenas distintos
+  const asphalt = (base, s0) => vars(s0, (x, y, r, i) => {
+    const v = r(), b = sh(base, Math.round((hash(x >> 3, y >> 3, 90 + i) - 0.5) * 6));
+    return v < 0.045 ? sh(b, 22) : v < 0.11 ? sh(b, -10) : v < 0.2 ? sh(b, 6) : b;
+  });
+  TEX[T_ROAD] = asphalt([58, 58, 66], 101);
+  TEX[T_BRIDGE] = asphalt([70, 70, 78], 102);
+  TEX[T_PARK] = vars(103, (x, y, r, i) => {
+    if (x < 2 && y > 2 && y < TT - 3) return [214, 212, 204]; // línea de la cochera
+    const v = r(), b = sh([66, 66, 72], Math.round((hash(x >> 3, y >> 3, 95 + i) - 0.5) * 6));
+    return v < 0.05 ? sh(b, 20) : v < 0.12 ? sh(b, -9) : b;
+  });
+  // vereda: baldosas "vainilla" de 6 px con junta, cada una con su tono y sus 4 puntitos
+  TEX[T_SIDE] = vars(104, (x, y, r, i) => {
+    const b = 6, bx = Math.floor(x / b), by = Math.floor(y / b);
+    if (x % b === 0 || y % b === 0) return [132, 129, 124];
+    let c = 172 + Math.round((hash(bx + i * 7, by, 33) - 0.5) * 14);
+    if ((x % b === 2 || x % b === 4) && (y % b === 2 || y % b === 4)) c -= 9;
+    const v = r(); if (v < 0.05) c += 10; else if (v < 0.09) c -= 12;
+    if (i === 3 && bx === 2 && by === 1 && (x + y) % 3 === 0) c -= 30; // baldosa rajada
+    return [c, c - 3, c - 8];
+  });
+  const grassFn = (base, lush) => (x, y, r, i) => {
+    const v = r(), bl = hash(x >> 2, y >> 2, 40 + i);
+    if (v < 0.003) return [236, 224, 96]; if (v < 0.005) return [240, 240, 240];
+    if ((x * 3 + y * 7 + i * 11) % 19 === 0) return [base[0] + 30, base[1] + 36, base[2] + 20]; // briznas
+    if (v < 0.16) return [base[0] + 15, base[1] + 18, base[2] + 10];
+    if (v < 0.3) return [base[0] - 12, base[1] - 20, base[2] - 8];
+    return [base[0] + Math.round((bl - 0.5) * 10), base[1] + Math.round((bl - 0.5) * lush), base[2] + Math.round((bl - 0.5) * 8)];
+  };
+  TEX[T_GRASS] = TEX[T_PATH] = vars(105, grassFn([62, 132, 54], 18));
+  TEX[T_MEDIAN] = vars(106, grassFn([72, 144, 60], 8));
+  TEX[T_SAND] = vars(107, (x, y, r, i) => {
+    const v = r();
+    if ((y + Math.round(2 * Math.sin((x + i * 5) * 0.45))) % 7 === 0) return [198, 176, 120]; // ondas que deja el viento
+    return v < 0.1 ? [196, 174, 118] : v < 0.16 ? [236, 220, 170] : [216, 198, 140];
+  });
+  TEX[T_PEAT] = vars(108, (x, y, r, i) => { // adoquín de ladrillo trabado de la peatonal
+    const row = Math.floor(y / 4), off = (row % 2) * 4, bx = Math.floor((x + off) / 8);
+    if (y % 4 === 0 || (x + off) % 8 === 0) return [118, 66, 54];
+    const c = Math.round((hash(bx + i * 9, row, 34) - 0.5) * 22), v = r();
+    return [172 + c + (v < 0.08 ? 14 : 0), 92 + c / 2, 74 + c / 3];
+  });
+  TEX[T_DIRT] = vars(109, (x, y, r) => { const v = r(); return v < 0.03 ? [182, 174, 160] : v < 0.15 ? [114, 94, 68] : v < 0.24 ? [162, 138, 102] : [140, 116, 84]; });
+  TEX[T_YARD] = vars(110, (x, y, r, i) => {
+    const v = r();
+    if (i === 3 && (x * 7 + y * 3) % 23 < 9) return v < 0.3 ? [112, 92, 66] : [128, 106, 76];
+    return v < 0.12 ? [90, 136, 72] : v < 0.22 ? [68, 102, 56] : v < 0.24 ? [128, 106, 76] : [79, 122, 66];
+  });
+  for (const t in TEX) TEXD[t] = TEX[t].map(c => c.width === TT ? c.getContext('2d').getImageData(0, 0, TT, TT).data : null);
+}
 
 // ============================================================ EDIFICIOS (siluetas reales del satélite + OSM)
 const BLD = [];
@@ -459,7 +524,257 @@ function drawTree(g, x, y, r, lap) {
 const CH = 32, CPX = CH * TS;
 const chunks = new Map();
 let frameNo = 0;
+// ---- Chunks en alta (modo 3D): el piso a GS×, con los bordes de calzada y vereda suaves (no en escalera),
+// cordón cuneta, sendas peatonales, tapas, baches y manchas. Los árboles no se pintan: los levanta el 3D.
+const HD_M = 2, HD_W = CH + 2 * HD_M;
+const ROADC = t => t === T_ROAD || t === T_BRIDGE || t === T_PARK;
+const WATERC = t => t === T_WATER || t === T_BRIDGEW;
+let hdOv = null, hdImg = null, hdNoise = null, nodeGrid = null, lastTrees = null;
+function hdBlur(raw, out) { // máscara de tiles desenfocada [1 2 1]²: su curva de nivel 0,5 es el borde suave
+  const W2 = HD_W, tmp = new Float32Array(W2 * W2);
+  for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) { const k = j * W2 + i; tmp[k] = (raw[i > 0 ? k - 1 : k] + 2 * raw[k] + raw[i < W2 - 1 ? k + 1 : k]) / 4; }
+  for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) { const k = j * W2 + i; out[k] = (tmp[j > 0 ? k - W2 : k] + 2 * tmp[k] + tmp[j < W2 - 1 ? k + W2 : k]) / 4; }
+}
+function crossings(g, a, cxp, cyp) { // senda peatonal en cada boca de la esquina
+  const ta = tileAtPx(nx[a], ny[a]); if (ta !== T_ROAD) return;
+  if (hash(a, 3, 71) > Math.max(0.35, 1 - Math.hypot(nx[a] - SPAWN.x, ny[a] - SPAWN.y) / 6000)) return; // en el centro hay en todas
+  const arms = [];
+  for (const b of nbrs[a]) {
+    let e = out[a].find(i => eb[i] === b); if (e === undefined) e = out[b].find(i => eb[i] === a); if (e === undefined) continue;
+    laneInfo(e);
+    const sg = ea[e] === a ? 1 : -1, ux = edx[e] * sg, uy = edy[e] * sg, two = ef[e] & 2;
+    const c = (two ? eoff[e] - ehalf[e] * 0.42 : eoff[e]) * sg;
+    arms.push({ ux, uy, hw: Math.min(60, ehalf[e]), c, len: elen[e] });
+  }
+  if (arms.length < 3) return;
+  g.fillStyle = 'rgba(238,238,232,0.88)';
+  for (const A of arms) {
+    let d0 = 6; for (const B of arms) if (B !== A) d0 = Math.max(d0, B.hw * Math.min(1, Math.abs(A.ux * B.uy - A.uy * B.ux) + 0.15) + 5);
+    d0 = Math.min(d0, 64); if (A.len < d0 + 30 || A.hw < 8) continue;
+    const rx = -A.uy, ry = A.ux, L = 7;
+    for (let v = -A.hw + 2.6; v <= A.hw - 2.4; v += 4.6) {
+      const mx = nx[a] + A.ux * (d0 + L) + rx * (A.c + v), my = ny[a] + A.uy * (d0 + L) + ry * (A.c + v);
+      if (tileAtPx(mx, my) !== T_ROAD || tileAtPx(mx + A.ux * L, my + A.uy * L) !== T_ROAD) continue;
+      const P = (s, w) => [mx + A.ux * s + rx * w - cxp, my + A.uy * s + ry * w - cyp];
+      g.beginPath(); g.moveTo(...P(-L, -1.2)); g.lineTo(...P(L, -1.2)); g.lineTo(...P(L, 1.2)); g.lineTo(...P(-L, 1.2)); g.fill();
+    }
+  }
+}
+function roadDecal(g, tx, ty, x, y) { // tapas de cloaca, manchas de aceite, baches, parches y grietas
+  const h = hash(tx, ty, 61), q = k => hash(tx, ty, 62 + k);
+  if (h < 0.008) {
+    g.fillStyle = '#2a2a2e'; g.beginPath(); g.arc(x, y, 2.7, 0, 7); g.fill();
+    g.fillStyle = '#5c5a56'; g.beginPath(); g.arc(x, y, 2.1, 0, 7); g.fill();
+    g.fillStyle = '#44423f'; for (let k = -1; k <= 1; k++) { g.fillRect(x - 1.8, y + k * 0.9 - 0.2, 3.6, 0.4); g.fillRect(x + k * 0.9 - 0.2, y - 1.8, 0.4, 3.6); }
+  } else if (h < 0.022) {
+    g.fillStyle = 'rgba(14,12,20,0.26)'; g.beginPath(); g.ellipse(x, y, 2.5 + q(1) * 3, 1.6 + q(2) * 2, q(3) * 3, 0, 7); g.fill();
+    g.fillStyle = 'rgba(30,20,50,0.18)'; g.beginPath(); g.ellipse(x + 0.6, y - 0.4, 1.2 + q(4), 0.9 + q(5), q(3) * 3, 0, 7); g.fill();
+  } else if (h < 0.03) {
+    const n = 7, R0 = 1.6 + q(1) * 1.6, pts = [];
+    for (let k = 0; k < n; k++) { const a = k / n * 6.283, r = R0 * (0.7 + 0.5 * q(10 + k)); pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+    g.fillStyle = '#7a7670'; g.beginPath(); pts.forEach(([px, py], k) => k ? g.lineTo(px + 0.5, py + 0.5) : g.moveTo(px + 0.5, py + 0.5)); g.fill();
+    g.fillStyle = '#242428'; g.beginPath(); pts.forEach(([px, py], k) => k ? g.lineTo(px, py) : g.moveTo(px, py)); g.fill();
+  } else if (h < 0.05) {
+    g.fillStyle = q(1) < 0.5 ? 'rgba(0,0,8,0.13)' : 'rgba(255,255,255,0.05)';
+    const w = 5 + q(2) * 9, hh = 4 + q(3) * 6; g.fillRect(x - w / 2, y - hh / 2, w, hh);
+    g.strokeStyle = 'rgba(20,20,26,0.35)'; g.lineWidth = 0.5; g.strokeRect(x - w / 2, y - hh / 2, w, hh);
+  } else if (h < 0.068) {
+    g.strokeStyle = 'rgba(24,24,30,0.55)'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(x, y);
+    let px = x, py = y, a = q(1) * 6.28; for (let k = 0; k < 4; k++) { a += (q(5 + k) - 0.5) * 1.6; px += Math.cos(a) * 2.5; py += Math.sin(a) * 2.5; g.lineTo(px, py); }
+    g.stroke();
+  }
+}
+function buildChunkHD(cx, cy) {
+  const N = CPX * GS, [cv, g] = canvas(N, N), M = HD_M, W2 = HD_W;
+  const x0 = cx * CH, y0 = cy * CH, cxp = cx * CPX, cyp = cy * CPX;
+  const typ = new Uint8Array(W2 * W2), fS = new Uint8Array(W2 * W2), hasSide = new Uint8Array(W2 * W2);
+  const rawR = new Float32Array(W2 * W2), rawS = new Float32Array(W2 * W2), FR = new Float32Array(W2 * W2), FS = new Float32Array(W2 * W2);
+  for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) typ[j * W2 + i] = tileAt(x0 - M + i, y0 - M + j);
+  // material "de afuera" de calles, agua y veredas: el vecino más común que no sea ninguna de esas (gana el parterre)
+  for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) {
+    const k = j * W2 + i, t = typ[k];
+    if (!ROADC(t) && !WATERC(t) && t !== T_SIDE) { fS[k] = isBuilding(t) ? T_YARD : t; continue; }
+    const cnt = new Map(); let best = WATERC(t) ? T_SAND : T_YARD, bc = 0, med = false;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const n = tileAt(x0 - M + i + dx, y0 - M + j + dy);
+      if (n === T_SIDE) { hasSide[k] = 1; continue; }
+      if (ROADC(n) || WATERC(n)) continue;
+      const nn = isBuilding(n) ? T_YARD : n; if (nn === T_MEDIAN) med = true;
+      const c2 = (cnt.get(nn) || 0) + 1; cnt.set(nn, c2); if (c2 > bc) { bc = c2; best = nn; }
+    }
+    fS[k] = med && !WATERC(t) ? T_MEDIAN : best;
+  }
+  for (let k = 0; k < W2 * W2; k++) {
+    const t = typ[k]; rawR[k] = ROADC(t) ? 1 : 0;
+    rawS[k] = t === T_SIDE || (ROADC(t) && hasSide[k] && fS[k] !== T_MEDIAN) ? 1 : 0;
+  }
+  hdBlur(rawR, FR); hdBlur(rawS, FS);
+  // 1) base: tiles lejos de los bordes, de a una textura entera
+  const edges = [];
+  for (let ly = 0; ly < CH; ly++) for (let lx = 0; lx < CH; lx++) {
+    const i = lx + M, j = ly + M, k = j * W2 + i, t = typ[k];
+    let sR = 0, sS = 0;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const q = k + dj * W2 + di; sR += rawR[q]; sS += rawS[q]; }
+    if ((sR > 0 && sR < 25) || (sS > 0 && sS < 25)) { edges.push(lx, ly); continue; }
+    const tt = ROADC(t) ? t : t === T_SIDE ? T_SIDE : WATERC(t) && hasSide[k] ? T_SIDE : fS[k];
+    g.drawImage(TEX[tt][Math.floor(hash(x0 + lx, y0 + ly, 1) * V)], lx * TT, ly * TT);
+  }
+  // 2) bordes: por píxel, con la distancia (en tiles) al borde suave de la calzada y de la vereda
+  if (edges.length) {
+    if (!hdImg) { hdOv = canvas(N, N); hdImg = hdOv[1].createImageData(N, N); }
+    const od = hdImg.data; od.fill(0);
+    for (let e = 0; e < edges.length; e += 2) {
+      const lx = edges[e], ly = edges[e + 1], k = (ly + M) * W2 + lx + M, t = typ[k], vr = Math.floor(hash(x0 + lx, y0 + ly, 1) * V);
+      const own = TEXD[ROADC(t) ? t : T_ROAD][vr], side = TEXD[T_SIDE][vr], outer = TEXD[fS[k]][vr] || TEXD[T_YARD][vr];
+      const med = t === T_MEDIAN || fS[k] === T_MEDIAN;
+      for (let py = 0; py < TT; py++) {
+        const fv = ly + (py + 0.5) / TT + M - 0.5, j0 = fv | 0, wy = fv - j0;
+        let o = ((ly * TT + py) * N + lx * TT) * 4;
+        for (let px = 0; px < TT; px++, o += 4) {
+          const fu = lx + (px + 0.5) / TT + M - 0.5, i0 = fu | 0, wx = fu - i0, q = j0 * W2 + i0;
+          let a = FR[q], b = FR[q + 1], c = FR[q + W2], d = FR[q + W2 + 1], x2 = a - b - c + d;
+          let f = a + (b - a) * wx + (c - a) * wy + x2 * wx * wy, gx = b - a + x2 * wy, gy = c - a + x2 * wx;
+          const dR = (f - 0.5) / Math.max(0.2, Math.sqrt(gx * gx + gy * gy));
+          const ti = (py * TT + px) * 4;
+          let R0, G0, B0;
+          if (dR > 0.24) { R0 = own[ti]; G0 = own[ti + 1]; B0 = own[ti + 2]; }
+          else if (dR > 0.035) { const n = own[ti] * 0.35 + 104; R0 = n + 6; G0 = n + 4; B0 = n; } // cordón cuneta de hormigón
+          else if (dR > 0) { R0 = 78; G0 = 76; B0 = 74; }                                            // junta / cara del cordón
+          else if (dR > -0.1) { if (med) { R0 = 238; G0 = 236; B0 = 228; } else { R0 = 204; G0 = 200; B0 = 192; } } // cordón
+          else {
+            a = FS[q]; b = FS[q + 1]; c = FS[q + W2]; d = FS[q + W2 + 1]; x2 = a - b - c + d;
+            f = a + (b - a) * wx + (c - a) * wy + x2 * wx * wy; gx = b - a + x2 * wy; gy = c - a + x2 * wx;
+            const dS = (f - 0.5) / Math.max(0.2, Math.sqrt(gx * gx + gy * gy));
+            const src = dS > 0 ? side : outer;
+            R0 = src[ti]; G0 = src[ti + 1]; B0 = src[ti + 2];
+            if (dS > 0 && dS < 0.06) { R0 *= 0.8; G0 *= 0.8; B0 *= 0.8; } // línea municipal
+          }
+          od[o] = R0; od[o + 1] = G0; od[o + 2] = B0; od[o + 3] = 255;
+        }
+      }
+    }
+    hdOv[1].putImageData(hdImg, 0, 0);
+    g.drawImage(hdOv[0], 0, 0);
+  }
+  // 3) variación grande (manchones de pasto seco, asfalto más gastado) para que no se note la repetición
+  if (!hdNoise) hdNoise = canvas(11, 11);
+  {
+    const [ncv, ncg] = hdNoise, id = ncg.createImageData(11, 11);
+    for (let j = 0; j < 11; j++) for (let i = 0; i < 11; i++) {
+      const gx = cx * 8 - 1 + i, gy = cy * 8 - 1 + j, v = hash(gx, gy, 77) * 0.55 + hash(gx >> 2, gy >> 2, 78) * 0.45, o = (j * 11 + i) * 4;
+      id.data[o] = id.data[o + 1] = id.data[o + 2] = 96 + v * 64; id.data[o + 3] = 255;
+    }
+    ncg.putImageData(id, 0, 0);
+    g.save(); g.setTransform(GS, 0, 0, GS, 0, 0); g.imageSmoothingEnabled = true;
+    g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.3; g.drawImage(ncv, -48, -48, 11 * 48, 11 * 48); g.restore();
+  }
+  g.setTransform(GS, 0, 0, GS, 0, 0);
+  // 4) detalles por tile (en px del mundo)
+  for (let ly = 0; ly < CH; ly++) for (let lx = 0; lx < CH; lx++) {
+    const tx = x0 + lx, ty = y0 + ly, px = lx * TS, py = ly * TS, t = tileAt(tx, ty);
+    if (t === T_YARD) {
+      const side = n => n === T_SIDE;
+      g.fillStyle = '#b4aea4';
+      if (side(tileAt(tx, ty - 1))) g.fillRect(px, py, TS, 1.5);
+      if (side(tileAt(tx, ty + 1))) g.fillRect(px, py + TS - 1.5, TS, 1.5);
+      if (side(tileAt(tx - 1, ty))) g.fillRect(px, py, 1.5, TS);
+      if (side(tileAt(tx + 1, ty))) g.fillRect(px + TS - 1.5, py, 1.5, TS);
+      if (hash(tx, ty, 21) < 0.012 && tileAt(tx + 1, ty) === T_YARD && tileAt(tx, ty + 1) === T_YARD && tileAt(tx + 1, ty + 1) === T_YARD) {
+        g.fillStyle = '#e8e8e0'; g.fillRect(px + 4, py + 4, 16, 10);
+        g.fillStyle = '#2f8cc4'; g.fillRect(px + 5, py + 5, 14, 8);
+        g.fillStyle = '#5cb4e4'; g.fillRect(px + 5, py + 5, 14, 2);
+        g.fillStyle = '#9adaf8'; g.fillRect(px + 6, py + 8, 5, 0.5); g.fillRect(px + 12, py + 10, 5, 0.5);
+      }
+    } else if (t === T_BRIDGE) {
+      const rail = (x, y, w, h, vert) => {
+        g.fillStyle = '#c8c8d0'; g.fillRect(x, y, w, h);
+        g.fillStyle = '#5a5a66'; for (let k = 0; k < TS; k += 3) vert ? g.fillRect(x, y + k, w, 0.5) : g.fillRect(x + k, y, 0.5, h);
+      };
+      if (tileAt(tx, ty - 1) === T_WATER) rail(px, py, TS, 2, false);
+      if (tileAt(tx, ty + 1) === T_WATER) rail(px, py + TS - 2, TS, 2, false);
+      if (tileAt(tx - 1, ty) === T_WATER) rail(px, py, 2, TS, true);
+      if (tileAt(tx + 1, ty) === T_WATER) rail(px + TS - 2, py, 2, TS, true);
+    } else if (t === T_ROAD) {
+      let inner = true;
+      for (let dy = -1; dy <= 1 && inner; dy++) for (let dx = -1; dx <= 1; dx++) if (tileAt(tx + dx, ty + dy) !== T_ROAD) { inner = false; break; }
+      if (inner) roadDecal(g, tx, ty, px + 2 + hash(tx, ty, 63) * (TS - 4), py + 2 + hash(tx, ty, 64) * (TS - 4));
+    }
+  }
+  // senderos de plazas: trazos suaves, recortados a pasto/arena
+  const okPath = t => t === T_PATH || t === T_GRASS || t === T_SAND;
+  const clip = new Path2D();
+  for (let ly = 0; ly < CH; ly++) {
+    let run = -1;
+    for (let lx = 0; lx <= CH; lx++) {
+      const ok = lx < CH && okPath(tileAt(x0 + lx, y0 + ly));
+      if (ok && run < 0) run = lx; else if (!ok && run >= 0) { clip.rect(run * TS, ly * TS, (lx - run) * TS, TS); run = -1; }
+    }
+  }
+  g.save(); g.clip(clip); g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const [col, w] of [['#9a8458', 7], ['#d0b886', 5], ['#dcc698', 2]]) {
+    g.strokeStyle = col; g.lineWidth = w; g.beginPath();
+    for (const s of PATHS) {
+      if (s.maxx < cxp - 8 || s.minx > cxp + CPX + 8 || s.maxy < cyp - 8 || s.miny > cyp + CPX + 8) continue;
+      g.moveTo(s.ax - cxp, s.ay - cyp); g.lineTo(s.bx - cxp, s.by - cyp);
+    }
+    g.stroke();
+  }
+  g.restore();
+  // líneas pintadas: trazos parejos (también en las calles diagonales)
+  g.lineWidth = 1.15; g.lineCap = 'butt';
+  for (const s of MARKS) {
+    if (s.maxx < cxp - 4 || s.minx > cxp + CPX + 4 || s.maxy < cyp - 4 || s.miny > cyp + CPX + 4) continue;
+    g.strokeStyle = s.col; g.beginPath();
+    const P = d => [s.ax + s.dx * d - s.dy * s.off, s.ay + s.dy * d + s.dx * s.off];
+    for (let d = s.t0; d < s.len - s.t1; d += 14) {
+      const d1 = Math.min(d + 7, s.len - s.t1), A = P(d), B = P(d1), C = P((d + d1) / 2);
+      if (tileAtPx(A[0], A[1]) !== T_ROAD || tileAtPx(B[0], B[1]) !== T_ROAD || tileAtPx(C[0], C[1]) !== T_ROAD) continue;
+      g.moveTo(A[0] - cxp, A[1] - cyp); g.lineTo(B[0] - cxp, B[1] - cyp);
+    }
+    g.stroke();
+  }
+  // sendas peatonales en las esquinas (también las de los chunks vecinos que caen acá)
+  if (!nodeGrid) {
+    nodeGrid = new Map();
+    for (let a = 0; a < NN; a++) if (deg(a) >= 3) { const k = Math.floor(ny[a] / CPX) * 4096 + Math.floor(nx[a] / CPX); let l = nodeGrid.get(k); if (!l) nodeGrid.set(k, l = []); l.push(a); }
+  }
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) for (const a of nodeGrid.get((cy + dy) * 4096 + cx + dx) || []) {
+    if (nx[a] < cxp - 90 || nx[a] > cxp + CPX + 90 || ny[a] < cyp - 90 || ny[a] > cyp + CPX + 90) continue;
+    crossings(g, a, cxp, cyp);
+  }
+  for (const q of PITCHES) drawPitch(g, q, cxp, cyp);
+  // árboles y palmeras: van en 3D; acá solo la cazuela de tierra en la vereda
+  const trees = [], mine = (x, y) => x >= cxp && x < cxp + CPX && y >= cyp && y < cyp + CPX;
+  for (const [tx, ty, r, kind] of PROP_TREES) {
+    const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+    if (mine(x, y)) trees.push([x, y, kind === 1 ? 5 : r * 3, kind === 1 ? 2 : 0, hash(Math.round(tx), Math.round(ty), 42)]);
+  }
+  for (let ly = 0; ly < CH; ly++) for (let lx = 0; lx < CH; lx++) {
+    const tx = x0 + lx, ty = y0 + ly, t = tileAt(tx, ty), h = hash(tx, ty, 11), x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+    if (t === T_MEDIAN && hash(tx, ty, 41) < 0.12) { trees.push([x, y, 5, 2, hash(tx, ty, 42)]); continue; }
+    if (t === T_GRASS && PITCHES.length && inPitch(tx, ty, 0.12, 0.08)) continue;
+    if ((t === T_SIDE && h < 0.05) || (t === T_GRASS && h < 0.09) || (t === T_PATH && h < 0.015) || (t === T_YARD && h < 0.08)) {
+      let ox = 0, oy = 0;
+      if (t === T_SIDE) {
+        if (ROADLIKE[tileAt(tx, ty - 1)]) oy = -3; else if (ROADLIKE[tileAt(tx, ty + 1)]) oy = 3;
+        if (ROADLIKE[tileAt(tx - 1, ty)]) ox = -3; else if (ROADLIKE[tileAt(tx + 1, ty)]) ox = 3;
+        const lx2 = x + ox - cxp, ly2 = y + oy - cyp;
+        g.fillStyle = '#8c8880'; g.fillRect(lx2 - 3, ly2 - 3, 6, 6);
+        g.fillStyle = '#4a3a2a'; g.fillRect(lx2 - 2.4, ly2 - 2.4, 4.8, 4.8);
+        g.fillStyle = '#5e4a34'; g.fillRect(lx2 - 2.4, ly2 - 2.4, 4.8, 1);
+      }
+      const big = t === T_GRASS || t === T_YARD;
+      trees.push([x + ox, y + oy, big ? 5 + Math.floor(hash(tx, ty, 13) * 4) : 6, hash(tx, ty, 12) < (t === T_YARD ? 0.12 : 0.22) ? 1 : 0, hash(tx, ty, 14)]);
+    }
+  }
+  lastTrees = trees;
+  g.setTransform(GS, 0, 0, GS, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  return cv;
+}
 function buildChunk(cx, cy) {
+  if (GS > 1) return buildChunkHD(cx, cy);
+  lastTrees = null;
   const [cv, g] = canvas(CPX, CPX);
   const x0 = cx * CH, y0 = cy * CH;
   for (let ly = 0; ly < CH; ly++) for (let lx = 0; lx < CH; lx++) {
@@ -797,6 +1112,17 @@ const sfx = (() => {
 })();
 function sfxAt(x, y, fn) { const d = Math.sqrt(dist2(x, y, cam.x, cam.y)); const v = clamp(1 - d / 700, 0, 1); if (v > 0) fn(v); }
 
+// ============================================================ API PARA MÓDULOS (misiones, escenas 3D, minijuegos)
+// Los módulos (missions.js, scenes.js, futbol.js) se cargan después de game.js y usan window.Chipa.
+// - hooks.update(dt): cada paso de simulación (60/s) mientras se juega
+// - hooks.interact(playerCar): al apretar ENTER/F; si alguno devuelve true, se consume (no roba auto)
+// - hooks.render2d(ctx, ox, oy): dibujar encima del mundo en modo 2D (en 3D, ver markers)
+// - hooks.keydown(e): teclas; si devuelve true no las procesa el juego
+// - markers: [{x, y, color, label, r}] en px del mundo: el minimapa y el render 3D los muestran
+// - modal: mientras sea un objeto (p. ej. una escena 3D o el fútbol), el mundo queda en pausa y no se dibuja
+const HOOKS = { update: [], interact: [], render2d: [], keydown: [] };
+const MARKERS = [];
+let MODAL = null;
 // ============================================================ ESTADO
 const cars = [], peds = [], bullets = [], parts = [], pickups = [];
 const cam = { x: 0, y: 0, zoom: 1 };
@@ -1102,10 +1428,15 @@ function updateAI(c, dt) {
   if (c.s + L <= elen[c.e] || c.nextE < 0) [tx, ty] = lanePoint(c.e, Math.min(elen[c.e], c.s + L), c.lane);
   else [tx, ty] = lanePoint(c.nextE, Math.min(elen[c.nextE], c.s + L - elen[c.e]), c.lane);
   const d = angDiff(Math.atan2(ty - c.y, tx - c.x), c.a), maxTurn = (2.0 + c.spd / 35) * dt;
-  if (c.spd > 1) c.a += clamp(d, -maxTurn, maxTurn);
+  // si el punto a seguir queda muy de costado o atrás, frena para poder doblar cerrado (si no, lo orbita)
+  if (Math.abs(d) > 1.0) c.spd = Math.min(c.spd, 26);
+  const turn = c.spd > 1 ? clamp(d, -maxTurn, maxTurn) : 0;
+  c.a += turn;
   c.x += Math.cos(c.a) * c.spd * dt; c.y += Math.sin(c.a) * c.spd * dt;
   c.s = (c.x - nx[ea[c.e]]) * edx[c.e] + (c.y - ny[ea[c.e]]) * edy[c.e];
-  if (c.s >= elen[c.e] - 1 || dist2(c.x, c.y, nx[eb[c.e]], ny[eb[c.e]]) < 36) {
+  // ya dobló: si avanzó sobre la calle siguiente, pasa a ella aunque nunca haya "llegado" a la esquina
+  const s2 = c.nextE >= 0 ? (c.x - nx[ea[c.nextE]]) * edx[c.nextE] + (c.y - ny[ea[c.nextE]]) * edy[c.nextE] : -1;
+  if (c.s >= elen[c.e] - 1 || dist2(c.x, c.y, nx[eb[c.e]], ny[eb[c.e]]) < 36 || (c.s > elen[c.e] - L && s2 > 6)) {
     if (c.nextE < 0) {
       if (!c.isBus || !busNextLeg(c)) { c.remove = true; return; }
     } else { c.e = c.nextE; if (c.route) c.ri++; c.nextE = pickNext(c); }
@@ -1114,6 +1445,12 @@ function updateAI(c, dt) {
   // si algo lo sacó del camino, vuelve al carril
   const [px2, py2] = lanePoint(c.e, clamp(c.s, 0, elen[c.e]), c.lane);
   if (dist2(px2, py2, c.x, c.y) > 70 * 70) { c.x = px2; c.y = py2; c.a = Math.atan2(edy[c.e], edx[c.e]); }
+  // vigía anti-trompo: si giró más de una vuelta sin avanzar por la calle, lo acomoda en el carril
+  if (c.orbE !== c.e || c.s > c.orbS + 14) { c.orbE = c.e; c.orbS = c.s; c.orbT = 0; }
+  else if ((c.orbT += Math.abs(turn)) > 5.5 && !visible(c.x, c.y, 20)) {
+    const sv = clamp(c.s + 20, 0, elen[c.e]); [c.x, c.y] = lanePoint(c.e, sv, c.lane); c.s = sv;
+    c.a = Math.atan2(edy[c.e], edx[c.e]); c.orbT = 0; c.orbS = c.s;
+  } else if (c.orbT > 5.5) { c.spd = Math.min(c.spd, 12); c.orbT = 4; }
   c.vx = Math.cos(c.a) * c.spd; c.vy = Math.sin(c.a) * c.spd;
 }
 
@@ -1529,6 +1866,7 @@ function respawn() {
   clearPolice();
 }
 function tryEnterExit() {
+  for (const f of HOOKS.interact) if (f(player.car)) return;
   if (player.car) {
     const c = player.car;
     if (Math.hypot(c.vx, c.vy) > 45) return;
@@ -1589,6 +1927,8 @@ function updatePlayer(dt) {
 const keys = {}, pressed = {};
 const GAME_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter']);
 addEventListener('keydown', e => {
+  if (MODAL) return; // la escena o minijuego activo maneja sus propias teclas
+  if (state === 'play' && HOOKS.keydown.some(f => f(e))) { e.preventDefault(); return; }
   if (GAME_KEYS.has(e.code)) e.preventDefault();
   if (!keys[e.code]) pressed[e.code] = true;
   keys[e.code] = true;
@@ -1687,6 +2027,12 @@ function drawMini() {
   for (const c of cars) if (c.cop && c.mode === 'cop') {
     const x = Math.floor(c.x / TS) - tx + S / 2, y = Math.floor(c.y / TS) - ty + S / 2;
     mctx.fillStyle = blink ? '#ff2a2a' : '#3a70ff'; mctx.fillRect(x - 1, y - 1, 3, 3);
+  }
+  for (const m of MARKERS) { // objetivos de misión (en el borde si quedan lejos)
+    let x = m.x / TS - tx + S / 2, y = m.y / TS - ty + S / 2;
+    const k = Math.max(Math.abs(x - S / 2), Math.abs(y - S / 2)) / (S / 2 - 3);
+    if (k > 1) { x = S / 2 + (x - S / 2) / k; y = S / 2 + (y - S / 2) / k; }
+    mctx.fillStyle = blink && k > 1 ? '#fff' : (m.color || '#ffd030'); mctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5);
   }
   mctx.fillStyle = blink ? '#f0c030' : '#ff4060';
   mctx.fillRect(S / 2 - 1, S / 2 - 1, 3, 3);
@@ -1831,6 +2177,7 @@ function drawFX(ox, oy, bw, bh, clear) {
 let manageT = 0;
 const AI_TARGET = 34, PED_TARGET = 70;
 function update(dt) {
+  for (const f of HOOKS.update) f(dt);
   updatePlayer(dt);
   if (!player.car) updateZ(player);
   for (const p of peds) updateZ(p);
@@ -1871,7 +2218,9 @@ function update(dt) {
   const sp = player.car ? Math.hypot(player.car.vx, player.car.vy) : 0;
   const tx = player.x + (player.car ? player.car.vx * 0.5 : 0), ty = player.y + (player.car ? player.car.vy * 0.5 : 0);
   cam.x += (tx - cam.x) * Math.min(1, dt * 4); cam.y += (ty - cam.y) * Math.min(1, dt * 4);
-  const zt = player.car ? 1 - (1 - ZMIN) * clamp(sp / (MAXV * 0.85), 0, 1) : 1;
+  // se aleja recién desde ~50 px/s, con curva suave y un tope: las motos casi no alejan (se veían diminutas)
+  const pc = player.car, zFar = !pc ? 1 : pc.type === 'moto' ? 0.88 : pc.l > 40 ? 0.74 : 0.8;
+  const zu = clamp((sp - 50) / 130, 0, 1), zt = 1 - (1 - zFar) * zu * zu * (3 - 2 * zu);
   cam.zoom += (zt - cam.zoom) * Math.min(1, dt * (zt < cam.zoom ? 1.2 : 0.7));
   if (shake > 0) shake -= dt;
   manageT -= dt;
@@ -1963,6 +2312,7 @@ let last = performance.now(), acc = 0;
 const STEP = 1 / 60;
 function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (MODAL) { for (const k in keys) keys[k] = false; for (const k in pressed) pressed[k] = false; requestAnimationFrame(loop); return; }
   if (state === 'play' && !showBig && !window.__freeze) { // __freeze: pausa para depurar desde la consola
     acc += dt;
     while (acc >= STEP) { update(STEP); acc -= STEP; for (const k in pressed) pressed[k] = false; }
@@ -1977,4 +2327,29 @@ requestAnimationFrame(loop);
 // para depurar desde la consola
 window.__game = { player, cars, peds, cam, tileAt, MD, crime, wantedLevel, buildChunk, BRIDGES, bridgeAt, GANTRY, BLD, get R3() { return R3; },
   step: n => { for (let i = 0; i < n; i++) { update(STEP); for (const k in pressed) pressed[k] = false; } } };
+// API pública para los módulos (ver el comentario de "API PARA MÓDULOS")
+{
+  const [S0, W0, N0, E0] = MD.bbox, MX0 = Math.cos((S0 + N0) / 2 * Math.PI / 180) * 111320, MY0 = 110574, TM = MD.tileMeters;
+  window.Chipa = {
+    hooks: HOOKS, markers: MARKERS,
+    get modal() { return MODAL; },
+    // abre una pantalla a pantalla completa (escena 3D, minijuego) y pausa el mundo; close() lo devuelve
+    openModal(owner) { MODAL = owner || {}; sfx.engine(false, 0, false); [screen, $('screen3d')].forEach(c => c.style.visibility = 'hidden'); },
+    closeModal() { MODAL = null; [screen, $('screen3d')].forEach(c => c.style.visibility = ''); last = performance.now(); acc = 0; },
+    get state() { return state; },
+    player, cars, peds, cam, MD, TS, VTYPE, CAR_COLORS, WEAPONS, BLD,
+    graph: { nx, ny, ea, eb, ef, edx, edy, elen, out, DRIVE_EDGES },
+    tileAt, tileAtPx, solidPx, SOLID, T: { BLOCK: T_BLOCK, ROAD: T_ROAD, SIDE: T_SIDE, GRASS: T_GRASS, WATER: T_WATER, PARK: T_PARK, MEDIAN: T_MEDIAN },
+    makeCar, makePed, killPed, explode, damageCar, crime, wantedLevel, clearPolice, showMsg, sfx, respawn,
+    carSprite, busSprite, sportSprite, motoSprite, pedSprites, randomOutfit,
+    nearestDriveEdge, nearestNode, findPath, streetName, lanePoint, laneInfo,
+    // coordenadas: lat/lon <-> px del mundo
+    ll2px: (lat, lon) => [((lon - W0) * MX0 / TM + 0.5) * TS, ((N0 - lat) * MY0 / TM + 0.5) * TS],
+    px2ll: (x, y) => [N0 - (y / TS - 0.5) * TM / MY0, W0 + (x / TS - 0.5) * TM / MX0],
+    metersToPx: m => m * TS / TM,
+    isDown: (...c) => c.some(k => keys[k]), wasHit: (...c) => c.some(k => pressed[k]),
+    teleport(x, y) { const o = player.car || player; o.x = x; o.y = y; player.x = x; player.y = y; cam.x = x; cam.y = y; },
+  };
+  dispatchEvent(new Event('chipa-ready'));
+}
 })();
