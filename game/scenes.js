@@ -3,6 +3,9 @@
 // Cada escena vive en game/scenes/<id>.js y se carga la primera vez que se juega (ChipaScenes.register).
 //   Chipa.scenes.play(id, opts) → Promise<{ok, score?, reason?, data?}>   (reason: texto de derrota que muestra missions.js)
 //   Chipa.scenes.has(id) → si la escena existe en el catálogo
+//   Chipa.scenes.debugFinish(ok = true, data) → (pruebas) termina la escena abierta ya, resuelve la Promise y libera todo
+//   El bucle usa requestAnimationFrame con respaldo por setTimeout: corre aunque la pestaña esté oculta (más lento).
+//   st.finishNow(result) → como st.finish pero sin fundido.
 //
 // Cambios de API (todos compatibles hacia atrás; lo viejo sigue igual):
 //   · st.sfx.tone/noise aceptan o.pan (-1..1); st.sfx.whistle({pan, vol, delay}) = silbido "fiu-fiuuu".
@@ -733,16 +736,22 @@
       if (st.done) return; st.done = true;
       st.prompt(null);
       const r = Object.assign({ ok: false }, result);
-      const end = () => { cleanup(); resolve(r); };
+      const end = () => { if (st._closed) return; st._closed = true; cleanup(); resolve(r); };
       if (r.ok && result.message !== false) {
         st.toast(result.message || '¡Listo!', 3);
       }
       st._fade = { from: post.fade.value, to: 1, t: 0, d: r.ok ? 1.4 : 0.6, res: () => setTimeout(end, r.ok ? 500 : 50) };
       st.paused = false; st._ending = true;
     };
+    // termina ya, sin fundido (no depende de requestAnimationFrame): para depuración / pruebas de misiones
+    st.finishNow = result => {
+      if (st._closed) return; st._closed = true; st.done = true;
+      const r = Object.assign({ ok: false }, result);
+      cleanup(); resolve(r);
+    };
     let raf = 0, last = performance.now(), fpsAcc = 0, fpsN = 0;
     function cleanup() {
-      cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf); clearTimeout(rafTO); st._closed = true;
       window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true); window.removeEventListener('blur', onBlur);
       window.removeEventListener('resize', resize);
       try { if (st.instance && st.instance.dispose) st.instance.dispose(); } catch (e) { console.warn(e); }
@@ -762,8 +771,16 @@
       current = null;
       if (window.Chipa && window.Chipa.closeModal) window.Chipa.closeModal();
     }
+    // requestAnimationFrame con respaldo por setTimeout (con la pestaña/panel oculto no hay rAF y la escena se colgaba)
+    let rafTO = 0, rafPending = false;
+    function schedule() {
+      rafPending = true;
+      raf = requestAnimationFrame(t => { if (!rafPending) return; rafPending = false; clearTimeout(rafTO); frame(t); });
+      rafTO = setTimeout(() => { if (!rafPending) return; rafPending = false; cancelAnimationFrame(raf); frame(performance.now()); }, 120);
+    }
     function frame(now) {
-      raf = requestAnimationFrame(frame);
+      if (st._closed) return;
+      schedule();
       const rdt = Math.min(0.05, (now - last) / 1000); last = now;
       fpsAcc += (now - (st._lastNow || now)); fpsN++; st._lastNow = now;
       if (fpsAcc > 500) { st.fps = Math.round(fpsN * 1000 / fpsAcc); fpsAcc = 0; fpsN = 0; hud.fps.textContent = window.__scenesShowFps ? st.fps + ' fps ' + W + 'x' + H : ''; window.__scenesFps = st.fps; }
@@ -819,7 +836,7 @@
     }
     resize();
     st.fadeTo(0, 1.0);
-    raf = requestAnimationFrame(frame);
+    schedule();
     return st;
   }
 
@@ -839,6 +856,13 @@
   const API = {
     list: LIST,
     has(id) { return LIST.some(s => s.id === id); },
+    // depuración: termina la escena abierta como ganada/perdida (resuelve la Promise y libera todo al instante)
+    debugFinish(ok = true, data) {
+      const st = current && current.finishNow ? current : null;
+      if (!st) return false;
+      st.finishNow({ ok: !!ok, score: ok ? 1 : 0, data: Object.assign({ debug: true }, data || {}) });
+      return true;
+    },
     get playing() { return current ? current.def.id : null; },
     preload(id) { return load(id).then(() => true, () => false); },
     play(id, opts) {

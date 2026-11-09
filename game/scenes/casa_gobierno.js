@@ -128,7 +128,7 @@ ChipaScenes.register('casa_gobierno', {
     for (const d of DOORS) {
       const xs = d.cells.map(c => c[0]), zs = d.cells.map(c => c[1]), x0 = Math.min(...xs), x1 = Math.max(...xs) + 1, z0 = Math.min(...zs), z1 = Math.max(...zs) + 1;
       const horiz = (x1 - x0) === 2 && (z1 - z0) === 1;
-      if (horiz) { box(0.2, 3, 1.05, frameM, x0 + 0.1, 1.5, (z0 + z1) / 2, {}); box(0.2, 3, 1.05, frameM, x1 - 0.1, 1.5, (z0 + z1) / 2); if (z0 !== 19 && z0 !== 13) {} box(2.2, 0.35, 1.05, frameM, (x0 + x1) / 2, 2.9, (z0 + z1) / 2); }
+      if (horiz) { box(0.2, HLOW + 0.1, 1.05, frameM, x0 + 0.1, (HLOW + 0.1) / 2, (z0 + z1) / 2, {}); box(0.2, HLOW + 0.1, 1.05, frameM, x1 - 0.1, (HLOW + 0.1) / 2, (z0 + z1) / 2); }
       else { box(2.05, 3, 0.2, frameM, (x0 + x1) / 2, 1.5, z0 + 0.1); box(2.05, 3, 0.2, frameM, (x0 + x1) / 2, 1.5, z1 - 0.1); box(2.05, 0.35, 2.0, frameM, (x0 + x1) / 2, 2.9, (z0 + z1) / 2); }
     }
     // puerta del archivo (con llave)
@@ -261,8 +261,9 @@ ChipaScenes.register('casa_gobierno', {
     st.particles({ mode: 'dust', count: 80, center: [18.8, 1.4, 7], box: [14, 2.8, 11], size: 0.022, color: 0xffe0b0, bright: 0.45, far: 30, speed: 0.4 });
 
     // ============================================================ jugador y ordenanzas
-    const player = U.person({ skin: '#c8956a', hair: '#2a1a10', shirt: '#3a6a4a', pants: '#2a2a3a', shoes: '#1a1410' });
+    const player = U.person({ skin: '#c8956a', hair: '#2a1a10', shirt: '#4a9a6a', pants: '#3a3a5a', shoes: '#1a1410' });
     scene.add(player);
+    const pLight = new T.PointLight(U.C(0xffe0b0), 0.7, 4, 2); scene.add(pLight);
     const Pl = { x: 18.5, z: 29.6, yaw: Math.PI, hidden: null, speed: 0 };
     let checkpoint = { x: Pl.x, z: Pl.z };
     const GLOOK = { skin: '#b07a52', hair: '#1a1a1a', shirt: '#4a5a7a', pants: '#2a2a3a', hat: '#2a3a5a' };
@@ -272,7 +273,7 @@ ChipaScenes.register('casa_gobierno', {
       [[5, 16.2, 2.2], [20, 16.2, 0], [34.5, 16.2, 2.0], [20, 16.2, 0], [18.9, 12.2, 0], [18.9, 10.0, 0], [13.0, 9.9, 0], [13.0, 3.2, 1.6], [24.7, 3.2, 0], [24.7, 9.9, 2.0], [18.9, 10.0, 0], [18.9, 12.2, 0], [18.9, 16.2, 0]],
       [[14, 24.2, 1.2], [23.2, 24.2, 0], [23.2, 27.6, 5.5, 'radio'], [24.2, 25.9, 0], [27.6, 25.9, 0], [29.2, 25.2, 0], [34.3, 25.2, 0], [34.3, 21.6, 1.2], [28.6, 21.6, 0], [28.4, 25.2, 0], [28.4, 28.9, 0], [34.0, 28.9, 0], [37.2, 29.6, 1.8], [33.5, 28.9, 0], [28.4, 28.9, 0], [28.4, 25.9, 0], [27.6, 25.9, 0], [24.2, 25.9, 0], [15, 26.0, 1.5]],
     ];
-    const coneMat = new T.MeshBasicMaterial({ color: new T.Color(1.6, 1.4, 0.5), transparent: true, opacity: 0.22, depthWrite: false, side: T.DoubleSide });
+    const coneMat = new T.MeshBasicMaterial({ color: new T.Color(1.6, 1.4, 0.5), transparent: true, opacity: 0.3, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending, fog: false });
     const markT = ['?', '!'].map(ch => U.tex(U.canvas(8, 12, g => { R(g, '#1a1a1a', 1, 0, 6, 12); R(g, ch === '!' ? '#ff4020' : '#f0c030', 2, 1, 4, 10); U.text(g, ch, 4, 1, { align: 'center', size: 9, color: '#1a1a1a' }); }), { repeat: false, mips: false }));
     const guards = GDEF.slice(0, 2).map((d, k) => {
       const m = U.person(Object.assign({}, GLOOK, k ? { shirt: '#5a6a5a', skin: '#c89a70' } : {})); scene.add(m);
@@ -482,7 +483,7 @@ ChipaScenes.register('casa_gobierno', {
       g.pos[0] = g.x; g.pos[1] = 0.04; g.pos[2] = g.z;
       for (let i = 0; i <= g.seg; i++) { const a = g.yaw - g.half + (2 * g.half) * i / g.seg, L = rayLen(g.x, g.z, a, R0); g.pos[(i + 1) * 3] = g.x + Math.sin(a) * L; g.pos[(i + 1) * 3 + 1] = 0.04; g.pos[(i + 1) * 3 + 2] = g.z + Math.cos(a) * L; }
       g.cone.geometry.attributes.position.needsUpdate = true; g.cone.geometry.computeBoundingSphere();
-      const cm = g.cone.material; cm.color.setRGB(1.6 + g.meter * 1.6, 1.4 - g.meter * 1.2, 0.5 - g.meter * 0.4); cm.opacity = 0.2 + g.meter * 0.25;
+      const cm = g.cone.material; cm.color.setRGB(1.6 + g.meter * 1.6, 1.4 - g.meter * 1.2, 0.5 - g.meter * 0.4); cm.opacity = 0.3 + g.meter * 0.3;
       g.torch.position.set(g.x + Math.sin(g.yaw) * 0.3, 1.4, g.z + Math.cos(g.yaw) * 0.3); g.torch.target.position.set(g.x + Math.sin(g.yaw) * 4, 0, g.z + Math.cos(g.yaw) * 4);
       // detección
       if (finished || caughtBusy) return;
@@ -526,7 +527,7 @@ ChipaScenes.register('casa_gobierno', {
           Pl.yaw += angDiff(Math.atan2(vx, vz), Pl.yaw) * Math.min(1, dt * 12); Pl.speed = spd;
           footT -= dt; if (footT <= 0) { footT = Pl.sneak ? 0.55 : 0.36; SND.noise(0.05, { freq: Pl.sneak ? 500 : 900, vol: Pl.sneak ? 0.03 : 0.07 }); }
         } else Pl.speed = 0;
-        player.position.set(Pl.x, 0, Pl.z); player.rotation.y = Pl.yaw;
+        player.position.set(Pl.x, 0, Pl.z); player.rotation.y = Pl.yaw; pLight.position.set(Pl.x, 2.2, Pl.z + 0.8);
         player.scale.y = U.damp(player.scale.y, Pl.hidden ? 0.55 : Pl.sneak ? 0.85 : 1, 10, dt);
         player.visible = true;
         U.animPerson(player, Pl.speed, dt);
