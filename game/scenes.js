@@ -787,7 +787,7 @@
       if (tick(rdt)) draw();
     }
     // depuración: avanzar n pasos y dibujar (sirve con la pestaña en segundo plano)
-    st.debugStep = (n = 1, dt = 1 / 60) => { for (let i = 0; i < n; i++) tick(dt); draw(); };
+    st.debugStep = (n = 1, dt = 1 / 60) => { if (st._closed) return; for (let i = 0; i < n; i++) { tick(dt); if (st._closed) return; } draw(); }; // no hace nada si la escena ya se cerró
     window.__scenesCur = st;
     function tick(rdt) {
       const dt = st.paused ? 0 : rdt;

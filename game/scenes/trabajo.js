@@ -153,7 +153,9 @@ ChipaScenes.register('trabajo', {
         const path = [[0, rIn]], seen = new Set(['0,' + rIn]);
         const minLen = N + 2 + Math.floor(diff / 3);
         let ok = false;
+        let budget = 3000;
         const dfs = () => {
+          if (--budget < 0) return false;
           const [x, y] = path[path.length - 1];
           if (x === N - 1 && y === rOut && path.length >= minLen) return true;
           if (path.length > N * N * 0.75) return false;
@@ -164,7 +166,7 @@ ChipaScenes.register('trabajo', {
           }
           return false;
         };
-        let budget = 4000; const dfs0 = dfs; ok = (function guard() { return dfs0(); })();
+        ok = dfs();
         if (!ok) continue;
         const cells = [];
         for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) cells.push({ x, y, kind: 'vacio', base: 0, r: 0, onPath: false });
@@ -231,17 +233,19 @@ ChipaScenes.register('trabajo', {
       });
       return (tileCache[key] = U.tex(c, { repeat: false, mips: false }));
     };
-    const board3d = new T.Group(); board3d.position.set(19.5, 1.55, 0.27); scene.add(board3d);
+    const board3d = new T.Group(); board3d.position.set(19.5, 1.55, 1.33); scene.add(board3d);
     box(1.5, 1.5, 0.02, U.mat({ color: 0x14161a }), 0, 0, -0.01, { parent: board3d, shadow: false });
     const tileGeo = new T.PlaneGeometry(TS * 0.96, TS * 0.96);
     const tiles = PZG.cells.map(c => {
       const t = tileCanvas(c.kind, c.base, c.tn), m = new T.Mesh(tileGeo, U.mat({ map: t, emissive: 0xffffff, emissiveMap: t, ei: 0.15, rough: 0.6 }));
       m.position.set(-0.65 + TS * (c.x + 0.5), 0.65 - TS * (c.y + 0.5), 0.005); m.rotation.z = -c.r * Math.PI / 2; board3d.add(m); c.mesh = m; c.vr = c.r; return m;
     });
-    const lab = (txt, x, y, color) => { const t = U.tex(U.canvas(40, 10, g => { R(g, '#14161a', 0, 0, 40, 10); U.text(g, txt, 20, 1, { align: 'center', size: 6, color }); }), { repeat: false, mips: false }); const m = new T.Mesh(new T.PlaneGeometry(0.5, 0.125), new T.MeshBasicMaterial({ map: t })); m.position.set(x, y, 0.01); m.rotation.z = Math.PI / 2 * (x < 0 ? 1 : -1); board3d.add(m); };
-    lab('13,2 kV', -0.71, 0.65 - TS * (PZG.rIn + 0.5), '#f0c030'); lab('PLAYON', 0.71, 0.65 - TS * (PZG.rOut + 0.5), '#8ae0ff');
+    const lab = (txt, x, y, color) => { const t = U.tex(U.canvas(12, 8, g => { R(g, '#14161a', 0, 0, 12, 8); U.text(g, txt, 6, 0, { align: 'center', size: 7, color }); }), { repeat: false, mips: false }); const m = new T.Mesh(new T.PlaneGeometry(0.2, 0.135), new T.MeshBasicMaterial({ map: t, color: new T.Color(1.6, 1.6, 1.6) })); m.position.set(x, y, 0.01); board3d.add(m); };
+    lab('IN', -0.83, 0.65 - TS * (PZG.rIn + 0.5), '#f0c030'); lab('OUT', 0.83, 0.65 - TS * (PZG.rOut + 0.5), '#8ae0ff');
+    box(1.92, 0.16, 0.03, U.mat({ color: 0x14161a }), 0, 0.8, 0.0, { parent: board3d, shadow: false });
+    { const t = U.tex(U.canvas(64, 6, g => { R(g, '#14161a', 0, 0, 64, 6); U.text(g, 'IN 13,2 kV  ->  OUT PLAYON', 32, 0, { align: 'center', size: 5, color: '#e8dcc0' }); }), { repeat: false, mips: false }); const m = new T.Mesh(new T.PlaneGeometry(1.5, 0.14), new T.MeshBasicMaterial({ map: t })); m.position.set(0, 0.8, 0.02); board3d.add(m); }
     const cursor = new T.Mesh(new T.RingGeometry(TS * 0.46, TS * 0.54, 4, 1), new T.MeshBasicMaterial({ color: new T.Color(3, 2.4, 0.6) })); cursor.rotation.z = Math.PI / 4; cursor.position.z = 0.012; cursor.visible = false; board3d.add(cursor);
-    const sparks = st.particles({ mode: 'embers', count: 40, center: [19.5, 1.6, 0.6], box: [1.4, 1.4, 0.3], size: 0.03, color: 0xa0d8ff, bright: 3, speed: 2.5, far: 30 }); sparks.visible = false;
+    const sparks = st.particles({ mode: 'embers', count: 40, center: [19.5, 1.6, 1.5], box: [1.4, 1.4, 0.3], size: 0.03, color: 0xa0d8ff, bright: 3, speed: 2.5, far: 30 }); sparks.visible = false;
 
     // ============================================================ HUD y flujo
     const hudBox = st.el('cs3d-hud t'); hudBox.style.cssText = 'top:16px;right:16px;text-align:right;font-size:10px;line-height:2.1';
@@ -348,7 +352,7 @@ ChipaScenes.register('trabajo', {
         st.prompt(best ? `<b>[ESPACIO]</b> ${best.txt}` : null);
         if (best && st.action()) best.fn();
         // cámara: sigue al jugador, o se acerca al tablero
-        if (phase === 'puzzle') { tmp.set(19.5, 1.65, 2.35); camPos.lerp(tmp, 1 - Math.exp(-5 * dt)); lookP.lerp(tmp.set(19.5, 1.55, 0.3), 1 - Math.exp(-5 * dt)); }
+        if (phase === 'puzzle') { tmp.set(19.5, 1.62, 3.05); camPos.lerp(tmp, 1 - Math.exp(-5 * dt)); lookP.lerp(tmp.set(19.5, 1.55, 1.3), 1 - Math.exp(-5 * dt)); }
         else { tmp.set(Pl.x, 0, Pl.z).add(camOff); camPos.lerp(tmp, 1 - Math.exp(-5 * dt)); lookP.lerp(tmp.set(camPos.x, 0, camPos.z - camOff.z - 0.5), 1 - Math.exp(-5 * dt)); }
         cam.position.copy(camPos); cam.lookAt(lookP);
         player.visible = phase !== 'puzzle';
