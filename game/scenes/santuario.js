@@ -34,7 +34,7 @@ ChipaScenes.register('santuario', {
       U.R(g, '#5a6a2a', 0, 0, w, h); U.paint.noise(g, w, h, r, ['#4e5e24', '#66762e', '#6e7a34', '#56622a', '#7a7a3a'], w * h * 0.7);
       for (let k = 0; k < 40; k++) { const x = Math.floor(r() * w), y = Math.floor(r() * h); U.R(g, U.pick(r, ['#8a8a42', '#3e4a1c']), x, y, 1, 2); }
     });
-    const dirtC = U.canvas(32, 32, (g, w, h) => { U.paint.dirt(g, w, h, r, { cols: ['#8a5a3a', '#7a4e30', '#946444', '#6e4428'] }); });
+    const dirtC = U.canvas(32, 32, (g, w, h) => { U.paint.dirt(g, w, h, r, { cols: ['#6a5442', '#5e4a3a', '#74604a', '#54402e'] }); });
     const asphC = U.canvas(32, 32, (g, w, h) => { U.R(g, '#3a3634', 0, 0, w, h); U.paint.noise(g, w, h, r, ['#34302e', '#423e3a', '#2e2a28', '#4a4440'], w * h * 0.6); });
     const brickRedC = U.canvas(32, 32, (g, w, h) => {
       U.paint.brick(g, w, h, r, { bw: 8, bh: 4, cols: ['#c42a22', '#b0221c', '#d03028', '#a81e1a'], mortar: '#7a1610' });
@@ -79,7 +79,7 @@ ChipaScenes.register('santuario', {
     st.renderer.setClearColor(U.C(0x2a1a2a));
     const ground = new T.Mesh(new T.PlaneGeometry(160, 160), U.mat({ map: grassT, rough: 1 })); grassT.repeat.set(80, 80);
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; st.scene.add(ground);
-    const patch = new T.Mesh(new T.CircleGeometry(5.5, 12), U.mat({ map: dirtT, rough: 1 })); dirtT.repeat.set(5, 5);
+    const patch = new T.Mesh(new T.CircleGeometry(4.8, 12), U.mat({ map: dirtT, rough: 1 })); dirtT.repeat.set(5, 5);
     patch.rotation.x = -Math.PI / 2; patch.position.set(0, 0.01, -1.6); patch.receiveShadow = true; st.scene.add(patch);
     // la avenida (Maipú) detrás del altar
     const road = new T.Mesh(new T.PlaneGeometry(200, 7), U.mat({ map: asphT, rough: 0.9 })); asphT.repeat.set(60, 2);
@@ -87,12 +87,12 @@ ChipaScenes.register('santuario', {
     for (let x = -100; x < 100; x += 4) { const m = new T.Mesh(new T.PlaneGeometry(1.8, 0.15), U.mat({ color: 0xd8d0b0, rough: 1 })); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.03, -11); st.scene.add(m); }
     // siluetas lejanas: árboles, casas, postes de luz
     const far = new T.Group(); st.scene.add(far);
-    const treeM = U.mat({ color: 0x2a3a1e, rough: 1 }), houseM = [0x6a5a5a, 0x8a6a5a, 0x5a5a6a, 0x9a8a7a].map(c => U.mat({ color: c, rough: 1 })), roofM = U.mat({ color: 0x5a2a20, rough: 1 });
+    const treeM = U.mat({ color: 0x2a3a1e, rough: 1 }), houseM = [0x4a3a3a, 0x5a4638, 0x3a3a48, 0x6a5444].map(c => U.mat({ color: c, rough: 1 })), roofM = U.mat({ color: 0x5a2a20, rough: 1 });
     for (let k = 0; k < 40; k++) {
       const a = r() * Math.PI * 2, d = 26 + r() * 30, x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (z < -8 && z > -14) continue;
       if (r() < 0.65) { const t = new T.Mesh(new T.DodecahedronGeometry(2 + r() * 2.5, 0), treeM); t.position.set(x, 2.5 + r() * 2, z); t.scale.y = 0.8; t.castShadow = true; far.add(t); const tr = new T.Mesh(new T.CylinderGeometry(0.2, 0.3, 3, 5), U.mat({ map: barkT })); tr.position.set(x, 1.5, z); far.add(tr); }
-      else if (z < -14) { const hw = 4 + r() * 4, hh = 2.6 + r() * 3; const h = new T.Mesh(new T.BoxGeometry(hw, hh, 5), U.pick(r, houseM)); h.position.set(x, hh / 2, z); h.castShadow = true; far.add(h); }
+      else if (z < -19) { const hw = 4 + r() * 4, hh = 2.6 + r() * 3; const h = new T.Mesh(new T.BoxGeometry(hw, hh, 5), U.pick(r, houseM)); h.position.set(x, hh / 2, z); h.castShadow = true; far.add(h); }
     }
     for (let x = -60; x <= 60; x += 15) {
       const p = new T.Mesh(new T.CylinderGeometry(0.1, 0.14, 8, 5), U.mat({ color: 0x8a8a80 })); p.position.set(x, 4, -15); p.castShadow = true; far.add(p);
@@ -214,7 +214,7 @@ ChipaScenes.register('santuario', {
     const coll = new U.Collider(null, 1);
     coll.box(-0.95, -3.7, 0.95, -2.3); coll.box(PL.x - 0.3, PL.z - 0.25, PL.x + 0.3, PL.z + 0.25); coll.circle(-3.2, -2.3, 0.3); coll.circle(2.6, -2.8, 0.15); coll.circle(-1.7, -0.4, 0.35);
     for (const f of flags) coll.circle(f.f.position.x, f.f.position.z, 0.12);
-    const ctl = st.thirdPerson({ obj: pl, collider: coll, radius: 0.3, speed: 2.8, dist: 6.5, pitch: 0.52, lookH: 1.1, face: Math.PI, bounds: [-9, -6.5, 9, 9] });
+    const ctl = st.thirdPerson({ obj: pl, collider: coll, radius: 0.3, speed: 2.8, dist: 7, pitch: 0.36, lookH: 1.5, face: Math.PI, bounds: [-9, -6.5, 9, 9] });
     ctl.camYaw = ctl.camYawT = -0.25;
 
     // ============================================================ HUD y estado
@@ -239,7 +239,7 @@ ChipaScenes.register('santuario', {
       const ans = await st.choose('Ofrenda', `¿Qué dejás ${spot.label}?`, left.map(o => o.item[0].toUpperCase() + o.item.slice(1)).concat(['Nada, todavía']));
       if (st.done || ans >= left.length) return;
       const o = left[ans];
-      if (spotOf(o) === spot) {
+      if (spotOf(o).id === spot.id) {
         o.placed = true; placedFx[fxKey(o.item)]();
         [523, 659, 784].forEach((f, n) => SND.tone(f, 0.25, { type: 'triangle', vol: 0.06, delay: n * 0.1 }));
         st.toast(`${o.item[0].toUpperCase() + o.item.slice(1)} ${o.lugar}.<br><span style="color:#e8dcc0">${o.texto || ''}</span>`, 3.4);
