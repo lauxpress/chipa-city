@@ -41,11 +41,12 @@ window.LANDMARKS = {
     roof: { shape: 'gable', color: '#9a5a44' },
     towers: { layout: 'twin', w: 5, h: 32, cap: 'spire', capColor: '#3c3c46' },
   },
-  // Salmón anaranjado con ventanas en arco y molduras claras
+  // Santuario de la Cruz de los Milagros (frente a la Plaza de la Cruz, sobre Belgrano): blanca y crema, ecléctica,
+  // nave con techo a dos aguas gris claro y un campanario al frente que mira al atrio arbolado
   'Iglesia Santísima Cruz de los Milagros': {
-    height: 13, storey: 6.5, wall: '#e8906a', trim: '#f8e6d6', style: 'iglesia',
-    roof: { shape: 'gable', color: '#b85a40' },
-    towers: { layout: 'single', w: 4, h: 19, cap: 'pyramid', capColor: '#e8906a' },
+    height: 12, storey: 6, wall: '#f2ead8', trim: '#fffaf0', style: 'iglesia',
+    roof: { shape: 'gable', color: '#a8a49c', rise: 16 },
+    towers: { layout: 'single', w: 5, h: 26, cap: 'pyramid', capColor: '#d8cdb4' },
   },
   // Gris piedra, sobria, de tres plantas
   'Escuela Normal José Manuel Estrada': {
@@ -226,5 +227,48 @@ window.LANDMARKS = {
   'Huracán (tribuna sur)': { // de ladrillo, con locales blancos que dan a Teniente Ibáñez
     height: 8, storey: 3.2, wall: '#f2f2ee', trim: '#c8302a', style: 'moderno',
     roof: { shape: 'flat', color: '#9a8a7a' }, tribuna: { low: 0.15, seats: ['#b8603a', '#a4522e'], block: 8, rim: '#c87a54' },
+  },
+
+  // ---- Plaza de la Cruz y alrededores (build_map.py, desde la captura satelital) --------------------------------
+  // Escuela N° 3 del Centenario / Colegio Pte. Hipólito Yrigoyen: claustro de dos plantas con dos patios y tejas
+  'Escuela N° 3 del Centenario': {
+    height: 9, storey: 4.5, wall: '#ece0c8', trim: '#f8f2e4', style: 'colonial',
+    roof: { shape: 'hip', color: '#a8583c', rise: 12 },
+  },
+  'Escuela N° 3 del Centenario (centro)': { // el cuerpo del medio, entre los dos patios: techo plano gris
+    height: 8, storey: 4, wall: '#e6dcc6', trim: '#f4eee0', style: 'colonial',
+    roof: { shape: 'flat', color: '#9a9894' }, parapet: '#e6dcc6',
+  },
+  // Club San Martín: el gimnasio de techo grande (chapa gris a dos aguas, bajo) y la pileta techada
+  'Club San Martín': {
+    height: 10, storey: 5, wall: '#e8e6e0', trim: '#2a6a3a', style: 'moderno',
+    roof: { shape: 'gable', color: '#a8acb0', rise: 10 },
+  },
+  'Club San Martín (natatorio)': {
+    height: 7, storey: 3.5, wall: '#e8e6e0', trim: '#2a6a3a', style: 'moderno',
+    roof: { shape: 'vault', color: '#5a7ab0', rise: 8 },
+  },
+
+  // ---- Parque Mitre ----------------------------------------------------------------------------------------------
+  // Faro del Parque Mitre (1887): torrecita blanca con la linterna roja
+  'Faro del Parque Mitre': {
+    height: 11, storey: 2.75, wall: '#f4f2ec', trim: '#c83a2a', style: 'moderno',
+    roof: { shape: 'flat', color: '#c83a2a' }, parapet: '#c83a2a', pyramid: { h: 2.5, color: '#c83a2a' },
+  },
+  'Biblioteca El Palomar': {
+    height: 4.5, storey: 4.5, wall: '#f2efe6', trim: '#b0503a', style: 'colonial',
+    roof: { shape: 'hip', color: '#b05a3c', rise: 10 },
+  },
+
+  // ---- Lugares de misión ------------------------------------------------------------------------------------------
+  // Altarcito del Gauchito Gil (Av. Maipú y Necochea): casita roja con techo a dos aguas; las banderas van en props.flags
+  'Altar del Gauchito Gil': {
+    height: 1.9, storey: 1.9, wall: '#c8201c', trim: '#f0d040', style: 'casita',
+    roof: { shape: 'gable', color: '#9a1010', rise: 5 },
+  },
+  // Cerveza Patagonia: galpón de madera oscura con techo de chapa a dos aguas, frente al jardín cervecero
+  'Cerveza Patagonia': {
+    height: 6, storey: 6, wall: '#5a3a26', trim: '#e8c070', style: 'ladrillo',
+    roof: { shape: 'gable', color: '#3a3e44', rise: 14 },
   },
 };

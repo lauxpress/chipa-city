@@ -993,7 +993,8 @@ if all((BA_BOL, SA_BOL, BA_BEL, SA_BEL, BA_SM, SA_SM, BA_MO, SA_MO)):
 
     # Club San Martín (vereda de enfrente, sobre Salta): el techo grande del gimnasio, la pileta cubierta y el polvo de ladrillo
     building(Cb([(500, 621), (597, 627), (594, 730), (497, 724)]), "Club San Martín", 3, style=3, pal=1)
-    building(Cb([(459, 617), (500, 621), (499, 671), (458, 668)]), "Club San Martín (natatorio)", 2, style=3, pal=1)
+    building(Cb([(459, 617), (500, 621), (499, 671), (458, 668)]), "Club San Martín (natatorio)", 2, style=3, pal=1,
+             over=[YARD, BLOCK, OSMB, GRASS, FOOTPATH, DIRT, PARKING, WATER])  # la pileta está techada
     lot(Cb([(518, 733), (588, 737), (586, 789), (516, 785)]), DIRT)
     print("Plaza de la Cruz y alrededores: listos")
 else:
@@ -1028,6 +1029,7 @@ if _hk:
         _pi = Image.new("L", (W, H), 0); ImageDraw.Draw(_pi).ellipse([x - rr, y - rr, x + rr, y + rr], fill=1)
         grid[(np.array(_pi) > 0) & np.isin(grid, [GRASS, FOOTPATH, YARD])] = SAND
         work_props.setdefault("playgrounds", []).append([round(x, 2), round(y, 2), rm])
+        excl_polys.append(_PtE(x, y).buffer(rr)); excl_osm.append(_PtE(x, y).buffer(rr))   # el techito de OSM: lo dibuja el 3D
     # puerto deportivo: muelles de madera y lanchas amarradas
     for pl in [[(110, 465), (350, 700)], [(130, 660), (240, 740), (350, 700)]]:
         pts = Pm(pl)
@@ -1123,18 +1125,16 @@ for key, name, toward in [("casa_gobierno", "Casa de Gobierno de la Provincia de
                           ("la_merced", "Iglesia Nuestra Señora de la Merced", None),
                           ("catedral", "Catedral Ntra. Sra. del Rosario", None),
                           ("san_francisco", "Iglesia San Francisco Solano", None),
-                          ("dpec", "Dirección Provincial de Energía (DPEC)", SA_SM)]:
+                          ("dpec", "Dirección Provincial de Energía (DPEC)", "sur")]:
     pp = osm_named(name)
+    if pp and toward == "sur":   # la puerta da a San Martín, al sur del edificio
+        toward = (sum(p[0] for p in pp) / len(pp), sum(p[1] for p in pp) / len(pp) + 30)
     if pp:
         poi[key] = facade_poi(pp, toward)
 if HUR_CLUB:   # Huracán: la entrada de la tribuna oeste, sobre la calle
     poi["huracan"] = near_tile(*hm(0, -HLB - 26))
 if all(CORN.values()):   # el trabajo: la puerta del edificio de losa sobre Bolívar
     poi["trabajo"] = near_tile(*bl(0.53, 0.02))
-# parada de colectivos útil: en la Plaza 25 de Mayo (centro, frente a la Casa de Gobierno, pasan varias líneas)
-_bus = node_of("25 de Mayo", "Salta") or node_of("Avenida 3 de Abril", "La Rioja")
-if _bus:
-    poi["parada_colectivo"] = near_tile(_bus[0] + 6, _bus[1] + 4, (SIDEWALK,))
 poi = {k: v for k, v in poi.items() if v}
 print("POI:", poi)
 
@@ -1212,6 +1212,24 @@ if _bt.exists():
         if len(r["edges"]) >= 6:
             bus_routes.append({"line": r["line"], "ramal": r["ramal"], "dir": r["dir"], "edges": r["edges"]})
     print("recorridos de colectivos:", len(bus_routes), [f'{r["line"]}{r["ramal"]}-{r["dir"][0]}' for r in bus_routes])
+
+# Parada de colectivos para las misiones: el tramo del centro por donde pasan más líneas (a menos de ~800 m de la
+# Plaza 25 de Mayo), sobre la vereda de la derecha según el sentido de la calle.
+_cnt = defaultdict(set)
+for r in bus_routes:
+    for e in r["edges"]:
+        _cnt[e].add(r["line"] + r["ramal"])
+_best = None
+for e, ls in _cnt.items():
+    a, b = edges[e][0], edges[e][1]
+    mx_, my_ = (node_xy[a][0] + node_xy[b][0]) / 2, (node_xy[a][1] + node_xy[b][1]) / 2
+    if math.hypot(mx_ - spawn[0], my_ - spawn[1]) < 350 and (_best is None or len(ls) > _best[0]):
+        _best = (len(ls), a, b, mx_, my_, sorted(ls))
+if _best:
+    _, a, b, mx_, my_, ls = _best
+    dx, dy = node_xy[b][0] - node_xy[a][0], node_xy[b][1] - node_xy[a][1]; L = math.hypot(dx, dy) or 1
+    poi["parada_colectivo"] = near_tile(mx_ - dy / L * 4, my_ + dx / L * 4, (SIDEWALK,))
+    print("parada de colectivos:", poi["parada_colectivo"], names[edges[0][3]] if False else "", "líneas", ls)
 
 # RLE (valor, largo<=255) + base64
 flat = grid.flatten()

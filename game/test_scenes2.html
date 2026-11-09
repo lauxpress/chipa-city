@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chipa City — escenas patagonia / casa_gobierno / trabajo</title>
+<style>
+  body { margin: 0; background: #1a1420; color: #f4f0d8; font-family: monospace; padding: 24px; }
+  h1 { font-size: 16px; color: #f0c030; }
+  button { font: inherit; font-size: 12px; margin: 6px; padding: 10px 14px; background: #2a2230; color: #f4f0d8; border: 2px solid #f0c030; cursor: pointer; box-shadow: 4px 4px 0 #000; }
+  label { font-size: 12px; margin-right: 16px; }
+  input { font: inherit; width: 60px; }
+  #log { margin-top: 20px; font-size: 12px; line-height: 2; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Escenas 3D — banco de pruebas 2 (opts reales de missions_data.js)</h1>
+<div>
+  <label>Dificultad (vacío = la del guion) <input id="dif" type="number" min="1" max="10" value=""></label>
+  <label><input id="fps" type="checkbox" checked> FPS</label>
+</div>
+<div id="btns"></div>
+<div id="log"></div>
+<script src="vendor/three.min.js"></script>
+<script>
+  window.Chipa = { openModal(o) { console.log('openModal', o); }, closeModal() { console.log('closeModal'); } };
+  window.__scenesCapture = true;
+  window.__scenesShowFps = true;
+</script>
+<script src="missions_data.js"></script>
+<script src="scenes.js"></script>
+<script>
+  const log = t => { document.getElementById('log').textContent = t + '\n' + document.getElementById('log').textContent; };
+  // pasos `scene` del guion
+  const STEPS = [];
+  for (const m of window.MISSIONS || []) m.steps.forEach((s, i) => { if (s.type === 'scene') STEPS.push({ label: `${m.id} #${i} → ${s.id}`, id: s.id, opts: s.opts || {} }); });
+  const want = ['patagonia', 'casa_gobierno', 'trabajo'];
+  window.__optsFor = (id, k = 0) => JSON.parse(JSON.stringify(STEPS.filter(s => s.id === id)[k].opts));
+  for (const s of STEPS.filter(s => want.includes(s.id)).concat(want.map(id => ({ label: id + ' (sin opts)', id, opts: {} })))) {
+    const b = document.createElement('button'); b.textContent = s.label;
+    b.onclick = () => {
+      window.__scenesShowFps = document.getElementById('fps').checked;
+      const o = JSON.parse(JSON.stringify(s.opts)); const d = document.getElementById('dif').value; if (d) o.dificultad = +d;
+      Chipa.scenes.play(s.id, o).then(r => log(s.label + ' → ' + JSON.stringify(r)));
+    };
+    document.getElementById('btns').appendChild(b);
+  }
+  window.__shot = async (name) => {
+    const c = document.querySelector('.cs3d-gl'); if (!c) return 'sin escena';
+    const r = await fetch('http://127.0.0.1:8772/' + (name || 'shot'), { method: 'POST', body: c.toDataURL('image/png') });
+    return await r.text();
+  };
+  window.__go = async (id, o, name, steps = 90) => {
+    Chipa.scenes.play(id, o).then(r => { window.__res = r; log(id + ' → ' + JSON.stringify(r)); });
+    await new Promise(r => setTimeout(r, 1200));
+    __scenesCur.debugStep(steps); return name ? await __shot(name) : 'ok';
+  };
+  window.__key = (code, frames = 6, after = 6) => {
+    const s = __scenesCur; window.dispatchEvent(new KeyboardEvent('keydown', { code }));
+    s.debugStep(frames); window.dispatchEvent(new KeyboardEvent('keyup', { code })); s.debugStep(after);
+  };
+  // versiones asíncronas: dejan correr las promesas de la escena entre paso y paso
+  const tick0 = () => new Promise(r => setTimeout(r, 0));
+  window.__k = async (code, frames = 4, after = 4) => { __key(code, frames, after); await tick0(); };
+  window.__run = async (frames) => { for (let i = 0; i < frames; i += 10) { if (!window.__scenesCur || __scenesCur.done) return; __scenesCur.debugStep(10); await tick0(); } };
+  window.__waitIn = async (max = 1500) => { for (let i = 0; i < max; i += 5) { if ([...document.querySelectorAll('.pt-btn')].some(b => !b.disabled)) return i; if (__scenesCur.done) return 'done'; __scenesCur.debugStep(5); await tick0(); } return 'timeout'; };
+  // truco: juega por vos con la IA (o al azar) hasta terminar; diálogos con ENTER
+  window.__autoTruco = async (o = {}) => {
+    const human = new ChipaTruco.AI(0, { diff: o.diff || 7 }); let n = 0, shots = 0;
+    const KEY = { E: 'KeyE', R: 'KeyR', F: 'KeyF', T: 'KeyT', Q: 'KeyQ', N: 'KeyN', M: 'KeyM' };
+    while (window.__scenesCur && !__scenesCur.done && n < (o.max || 400)) {
+      if (__scenesCur.busy) { await __k('Enter', 2, 10); continue; }
+      const w = await __waitIn(600); if (w === 'done') break; if (w === 'timeout') { await __k('Enter', 2, 10); continue; }
+      const g = __truco.game; if (g.whoActs() !== 0) { await __run(10); continue; }
+      const L = g.legal(0); let a = o.random ? L[Math.floor(Math.random() * L.length)] : human.decide(g);
+      if (o.lose && a !== 'N' && L.includes('N')) a = 'N';
+      if (a.startsWith('play')) await __k('Digit' + (+a.slice(4) + 1)); else await __k(KEY[a]);
+      n++; if (o.shotAt && n === o.shotAt) { await __run(40); await __shot(o.shotName || 'auto'); }
+    }
+    await __run(600);
+    return { n, scores: __truco.game.scores, res: window.__res };
+  };
+</script>
+</body>
+</html>

@@ -1144,6 +1144,11 @@ function createMatch(opts, done) {
         for (const p of players) if (p !== tk && !isHuman(p)) { const u = Math.min(p.bu * 0.92, 0.44); steer(p, fromU(p.team, u), p.bv * FH, 0.6); }
         if (isHuman(tk) && ball.owner === tk) {
           if (IN.kickP || IN.passP || hyp(IN.x, IN.y) > 0) { M.phase = 'play'; M.pt = 0; AU.whistle(0.35); }
+          else if (M.pt > 8) {   // si no saca nadie, saca solo (pase corto al compañero)
+            M.phase = 'play'; M.pt = 0; AU.whistle(0.35);
+            const q = team(kt).filter(p => p !== tk && p.role !== 'GK').sort((a, b) => hyp(a.x - tk.x, a.y - tk.y) - hyp(b.x - tk.x, b.y - tk.y))[0];
+            if (q) passTo(tk, q);
+          }
           else { tk.dvx = tk.dvy = 0; }
         } else if (M.pt > 1.0) {
           AU.whistle(0.35); M.phase = 'play'; M.pt = 0;
@@ -1648,19 +1653,36 @@ function createMatch(opts, done) {
   function drawHUD() {
     // marcador
     ctx.font = `8px ${FONT}`;
-    const nA = 'HURACÁN', nB = RIVAL.toUpperCase().slice(0, 13), sc = `${M.score[0]}-${M.score[1]}`;
+    let nA = SHORT0, nB = SHORT1;
+    const sc = `${M.score[0]}-${M.score[1]}`;
+    if (ctx.measureText(nA + nB + sc).width + 44 > VW - 70) {   // no entra (el reloj y el radar ocupan): nombres cortos
+      nA = nA.split(' ').pop(); nB = nB.split(' ').filter(w => w.length > 3)[0] || nB.split(' ')[0];
+    }
     const wA = ctx.measureText(nA).width, wB = ctx.measureText(nB).width, wS = ctx.measureText(sc).width;
     const W = Math.ceil(wA + wB + wS + 40), x0 = Math.round(VW / 2 - W / 2), y0 = 4;
     ctx.fillStyle = 'rgba(8,10,20,.82)'; ctx.fillRect(x0, y0, W, 13); ctx.fillStyle = '#f4f4f4'; ctx.fillRect(x0, y0 + 13, W, 1);
     // chapitas de colores
-    ctx.fillStyle = '#e0202e'; ctx.fillRect(x0 + 3, y0 + 3, 2, 7); ctx.fillStyle = '#2040b0'; ctx.fillRect(x0 + 5, y0 + 3, 2, 7);
+    ctx.fillStyle = LOOKS[0].shirt; ctx.fillRect(x0 + 3, y0 + 3, 2, 7); ctx.fillStyle = LOOKS[0].alt; ctx.fillRect(x0 + 5, y0 + 3, 2, 7);
     ctx.fillStyle = LOOKS[1].shirt; ctx.fillRect(x0 + W - 7, y0 + 3, 2, 7); ctx.fillStyle = LOOKS[1].alt; ctx.fillRect(x0 + W - 5, y0 + 3, 2, 7);
     pxText(ctx, nA, x0 + 10, y0 + 3, '#ffffff', 8, 'left', null);
     pxText(ctx, sc, x0 + 10 + wA + 10, y0 + 3, '#ffe040', 8, 'left', null);
     pxText(ctx, nB, x0 + W - 10 - wB, y0 + 3, '#ffffff', 8, 'left', null);
     // reloj
     let clk;
-    if (M.half === 3) clk = 'ORO ' + Math.max(0, Math.ceil(halfLimit() - M.clock)) + 's';
+    const S = M.shootout;
+    if (S) {   // tanda de penales: goles y una marquita por cada tiro (o verde, x roja)
+      clk = `PENALES ${S.goals[0]}-${S.goals[1]}`;
+      for (let t = 0; t < 2; t++) {
+        const n = Math.max(S.n, S.kicks[0], S.kicks[1]), yy = y0 + 28 + t * 7;
+        const xs = Math.round(VW / 2 - n * 3.5);
+        for (let k = 0; k < n; k++) {
+          const r = S.log[t][k];
+          ctx.fillStyle = '#000'; ctx.fillRect(xs + k * 7 - 1, yy - 1, 6, 6);
+          ctx.fillStyle = r === true ? '#60ff80' : r === false ? '#ff4040' : '#606070'; ctx.fillRect(xs + k * 7, yy, 4, 4);
+        }
+        pxText(ctx, t === 0 ? SHORT0.slice(0, 3) : SHORT1.slice(0, 3), xs - 4, yy - 2, '#ffffff', 8, 'right', '#000');
+      }
+    } else if (M.half === 3) clk = 'ORO ' + Math.max(0, Math.ceil(halfLimit() - M.clock)) + 's';
     else {
       const base = M.half === 2 ? 45 : 0, m = Math.floor(Math.min(M.clock, HALF) / HALF * 45) + base;
       clk = `${m}'`;
@@ -1676,7 +1698,7 @@ function createMatch(opts, done) {
     ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(rx + rw / 2, ry, 1, rh);
     ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.strokeRect(rx - 0.5, ry - 0.5, rw + 1, rh + 1);
     for (const p of players) {
-      ctx.fillStyle = p.team === 0 ? (p === M.ctrl && Math.floor(M.time * 6) % 2 ? '#ffe040' : '#ff3040') : LOOKS[1].shirt === '#f2f2ea' ? '#e0e0d8' : LOOKS[1].shirt;
+      ctx.fillStyle = p.team === 0 ? (p === M.ctrl && Math.floor(M.time * 6) % 2 ? '#ffe040' : (LOOKS[0].shirt === LOOKS[1].shirt ? '#ff3040' : LOOKS[0].shirt)) : LOOKS[1].shirt === '#f2f2ea' ? '#e0e0d8' : LOOKS[1].shirt;
       ctx.fillRect(rx + Math.round(p.x / FW * rw) - 1, ry + Math.round(p.y / FH * rh) - 1, 2, 2);
     }
     ctx.fillStyle = '#ffffff'; ctx.fillRect(rx + Math.round(ball.x / FW * rw), ry + Math.round(ball.y / FH * rh), 1, 1);
@@ -1685,6 +1707,11 @@ function createMatch(opts, done) {
     const B = M.big; if (!B) return;
     const sz = B.size; ctx.font = `${sz}px ${FONT}`;
     let size = sz; while (size > 8 && ctx.measureText(B.text).width > VW - 16) { size -= 8; ctx.font = `${size}px ${FONT}`; }
+    if (ctx.measureText(B.text).width > VW - 16) {   // ni en chiquito entra: en renglones, sin bailar
+      const ls = wrapText(B.text, 8, VW - 16), y0 = Math.round(VH * 0.36 - ls.length * 6);
+      ls.forEach((l, i) => pxText(ctx, l, Math.round(VW / 2), y0 + i * 12, B.col, 8, 'center', '#000'));
+      return;
+    }
     const w = ctx.measureText(B.text).width, chars = [...B.text];
     let x = Math.round(VW / 2 - w / 2);
     const y = Math.round(VH * 0.36), pop = Math.min(1, B.t * 5);
@@ -1694,7 +1721,23 @@ function createMatch(opts, done) {
       x += cw;
     });
   }
+  // corta en renglones lo que no entra en el ancho de la pantalla chica
+  function wrapText(t, size, maxW) {
+    ctx.font = `${size}px ${FONT}`;
+    if (ctx.measureText(t).width <= maxW) return [t];
+    const out = []; let cur = '';
+    for (const w of String(t).split(' ')) {
+      const tryS = cur ? cur + ' ' + w : w;
+      if (cur && ctx.measureText(tryS).width > maxW) { out.push(cur); cur = w; } else cur = tryS;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
   function panel(lines, y) {
+    lines = lines.flatMap(l => { const parts = wrapText(l.t, l.s || 8, VW - 28); return parts.map((t, i) => Object.assign({}, l, { t, gap: i < parts.length - 1 ? 3 : l.gap })); });
+    // si no entra en el alto, que suba
+    let hTot = 10; for (const l of lines) hTot += (l.s || 8) + (l.gap ?? 5);
+    y = Math.max(2, Math.min(y, VH - hTot - 2));
     ctx.font = `8px ${FONT}`;
     let w = 0; for (const l of lines) w = Math.max(w, ctx.measureText(l.t).width * (l.s || 8) / 8);
     w = Math.min(VW - 8, Math.ceil(w) + 20);
@@ -1717,8 +1760,10 @@ function createMatch(opts, done) {
       const n = NP === 7 ? 'Fútbol 7' : 'Fútbol 5';
       panel([
         { t: (opts.titulo || 'PARTIDO EN LA CANCHA DEL GLOBO').toUpperCase(), c: '#ffe040' },
-        { t: `HURACÁN vs ${RIVAL.toUpperCase()}`, c: '#ffffff', s: 8, gap: 4 },
+        { t: `${SHORT0} vs ${SHORT1}`, c: '#ffffff', s: 8, gap: 4 },
         { t: `${n} · ${minutos} min · ${TX.intro}`, c: '#c0c0c0', gap: 8 },
+        ...(RELATO.inicio ? [{ t: rel('inicio', ''), c: '#f0e0b0', gap: 6 }] : []),
+        ...(opts.objetivo ? [{ t: opts.objetivo, c: '#a0ffb8', gap: 8 }] : []),
         ...(opts.necesitaGanar ? [{ t: '¡HAY QUE GANAR SÍ O SÍ!', c: '#ff6060', gap: 8 }] : []),
         ...CONTROLS,
         { t: blink ? 'ESPACIO PARA ARRANCAR' : ' ', c: '#ffe040', gap: 2 },
@@ -1727,12 +1772,13 @@ function createMatch(opts, done) {
       const [a, b] = M.score;
       panel([
         { t: TX.final, c: '#ffe040' },
-        { t: `HURACÁN ${a} - ${b} ${RIVAL.toUpperCase()}`, c: '#ffffff', s: 8, gap: 8 },
-        { t: M.endMsg, c: a > b ? '#60ff80' : a < b ? '#ff6060' : '#f0f0f0', gap: 8 },
+        ...(RELATO.final ? [{ t: rel('final', ''), c: '#f0e0b0', gap: 6 }] : []),
+        { t: `${SHORT0} ${a} - ${b} ${SHORT1}`, c: '#ffffff', s: 8, gap: 8 },
+        { t: M.endMsg, c: M.winner === 0 ? '#60ff80' : M.winner === 1 ? '#ff6060' : '#f0f0f0', gap: 8 },
         { t: M.pt > 1.5 && blink ? 'ENTER PARA SEGUIR' : ' ', c: '#ffe040', gap: 2 },
       ], Math.round(VH * 0.3));
     } else if (M.phase === 'half') {
-      panel([{ t: `HURACÁN ${M.score[0]} - ${M.score[1]} ${RIVAL.toUpperCase()}`, c: '#ffffff' }, { t: 'Se cambian de lado', c: '#c0c0c0', gap: 2 }], Math.round(VH * 0.52));
+      panel([{ t: `${SHORT0} ${M.score[0]} - ${M.score[1]} ${SHORT1}`, c: '#ffffff' }, { t: 'Se cambian de lado', c: '#c0c0c0', gap: 2 }], Math.round(VH * 0.52));
     }
     if (M.phase === 'replay') {
       if (blink) pxText(ctx, '● REPETICIÓN', 8, 30, '#ff4040', 8, 'left', '#000');
@@ -1741,7 +1787,9 @@ function createMatch(opts, done) {
     }
     if (M.label) {
       const L = M.label, a = Math.min(1, (L.dur - L.t) * 4);
-      ctx.globalAlpha = clamp(a, 0, 1); pxText(ctx, L.text, Math.round(VW / 2), Math.round(VH * 0.22), '#ffffff', 8, 'center', '#000'); ctx.globalAlpha = 1;
+      ctx.globalAlpha = clamp(a, 0, 1);
+      wrapText(L.text, 8, VW - 16).forEach((l, i) => pxText(ctx, l, Math.round(VW / 2), Math.round(VH * 0.22) + i * 11, '#ffffff', 8, 'center', '#000'));
+      ctx.globalAlpha = 1;
     }
     if (M.phase === 'restart' && isHuman(M.restart.taker) && blink) {
       pxText(ctx, 'Apuntá con las flechas · ESPACIO patea · X pasa', Math.round(VW / 2), VH - 14, '#ffe040', 8, 'center', '#000');

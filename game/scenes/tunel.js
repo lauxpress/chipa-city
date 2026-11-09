@@ -308,14 +308,13 @@ ChipaScenes.register('tunel', {
     });
     // revoque a la cal, descascarado: asoma el ladrillo
     const calC = U.canvas(32, 32, (gg, w, h) => {
-      U.paint.plaster(gg, w, h, r, { col: '#cfc4a8' });
+      U.R(gg, '#cfc4a8', 0, 0, w, h); U.paint.noise(gg, w, h, r, ['#c8bc9e', '#d6ccb2'], w * h * 0.25);
       for (let k = 0; k < 4; k++) { const x = Math.floor(r() * 26), y = Math.floor(r() * 26), ww = 4 + Math.floor(r() * 6), hh = 3 + Math.floor(r() * 4);
         U.R(gg, '#7a4630', x, y, ww, hh); for (let yy = y; yy < y + hh; yy += 2) U.R(gg, '#4a3a2c', x, yy, ww, 1); U.R(gg, '#a89a7c', x - 1, y - 1, ww + 2, 1); }
       for (let k = 0; k < 3; k++) { let x = Math.floor(r() * 32), y = Math.floor(r() * 16); for (let s = 0; s < 10; s++) { U.R(gg, '#8a806a', x, y, 1, 1); x += Math.floor(r() * 3) - 1; y++; } }
-      U.paint.noise(gg, w, h, r, ['#b8ae94', '#a89e84'], 60);
     });
     const ashT = U.tex(ashC), calT = U.tex(calC);
-    const wallMats = [wallMat, U.mat({ map: ashT, bump: U.tex(ashC, { linear: true }), bumpScale: 0.8, vc: true, rough: 0.95 }), U.mat({ map: calT, bump: U.tex(calC, { linear: true }), bumpScale: 0.4, vc: true, rough: 1 })];
+    const wallMats = [wallMat, U.mat({ map: ashT, bump: U.tex(ashC, { linear: true }), bumpScale: 0.8, vc: true, rough: 0.95 }), U.mat({ map: calT, bump: U.tex(calC, { linear: true }), bumpScale: 0.12, vc: true, rough: 1 })];
     wallBs.forEach((b, n) => { if (b.pos.length) mk(b, wallMats[n]); }); mk(floorB, floorMat); mk(ceilB, ceilMat);
     const cellC = (i, j) => [i * S + S / 2, j * S + S / 2];
     const wallPos = (i, j, d, y, inset = 0) => { const [cx, cz] = cellC(i, j); return new T.Vector3(cx + DX[d] * (S / 2 - inset), y, cz + DZ[d] * (S / 2 - inset)); };

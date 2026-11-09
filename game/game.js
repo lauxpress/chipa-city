@@ -180,6 +180,7 @@ TEX[T_YARD] = variants(10, '#4f7a42', (x, y, r, i) => {
 });
 // ---- Piso en alta: en 3D los chunks se dibujan a GS× (24 px por tile ≈ 10,7 px por metro) con texturas propias
 const GS = USE3D ? 2 : 1, TT = TS * GS;
+const T_DOCK = 15; // solo para el piso en alta: el adoquín que cae sobre un muelle (props.docks) se pinta de madera
 const TEXD = []; // píxeles de cada textura (para el pase de bordes suaves)
 if (GS > 1) {
   const texN = (seed, fn) => {
@@ -236,6 +237,11 @@ if (GS > 1) {
     return [172 + c + (v < 0.08 ? 14 : 0), 92 + c / 2, 74 + c / 3];
   });
   TEX[T_DIRT] = vars(109, (x, y, r) => { const v = r(); return v < 0.03 ? [182, 174, 160] : v < 0.15 ? [114, 94, 68] : v < 0.24 ? [162, 138, 102] : [140, 116, 84]; });
+  // madera de muelle (sin dirección: las tablas se pintan después siguiendo el muelle)
+  TEX[T_DOCK] = vars(113, (x, y, r, i) => {
+    const v = r(), b = Math.round((hash(x >> 2, y >> 3, 120 + i) - 0.5) * 16);
+    return v < 0.06 ? [96 + b, 70 + b, 48 + b] : v < 0.12 ? [150 + b, 116 + b, 80 + b] : [128 + b, 96 + b, 66 + b];
+  });
   // patio / terreno: pasto más seco con alguna mancha de tierra chica (sin cuadros enteros de tierra: se notaba la grilla)
   const yardG = grassFn([74, 118, 60], 14);
   TEX[T_YARD] = vars(110, (x, y, r, i) => {
@@ -530,6 +536,24 @@ let frameNo = 0;
 // cordón cuneta, sendas peatonales, tapas, baches y manchas. Los árboles no se pintan: los levanta el 3D.
 const HD_M = 2, HD_W = CH + 2 * HD_M;
 // árboles gigantes (props.bigtrees: [x, y, radio m, alto m] en tiles); si el mapa todavía no los trae, la higuera del Parque Mitre
+// muelles (props.docks: polilíneas en tiles): tramos en px con el ancho medido sobre el adoquín de cada lado
+const DOCKSEG = [];
+for (const pl of (MD.props && MD.props.docks) || []) for (let i = 0; i + 3 < pl.length; i += 2) {
+  const ax = (pl[i] + 0.5) * TS, ay = (pl[i + 1] + 0.5) * TS, bx = (pl[i + 2] + 0.5) * TS, by = (pl[i + 3] + 0.5) * TS, L = Math.hypot(bx - ax, by - ay) || 1;
+  const ux = (bx - ax) / L, uy = (by - ay) / L, w = [12, 12];
+  for (let s = 0; s < 2; s++) {
+    const sg = s ? -1 : 1, v = [];
+    for (let t = L * 0.1; t < L * 0.9; t += 6) { let d = 0; while (d < 60 && tileAtPx(ax + ux * t - uy * d * sg, ay + uy * t + ux * d * sg) === T_PEAT) d++; v.push(d); }
+    if (v.length) { v.sort((p, q) => p - q); w[s] = Math.max(4, v[v.length >> 1]); }
+  }
+  DOCKSEG.push({ ax, ay, bx, by, ux, uy, L, wp: w[0], wn: w[1] });
+}
+function dockDist(x, y) {
+  let best = 1e9;
+  for (const s of DOCKSEG) { const dx = x - s.ax, dy = y - s.ay, t = clamp(dx * s.ux + dy * s.uy, 0, s.L); best = Math.min(best, Math.hypot(dx - s.ux * t, dy - s.uy * t)); }
+  return best;
+}
+const PLAYGROUNDS = ((MD.props && MD.props.playgrounds) || []).map(([x, y, r]) => [(x + 0.5) * TS, (y + 0.5) * TS, r * TS / MD.tileMeters]);
 const BIGTREES = (() => {
   const tm = MD.tileMeters, l = ((MD.props && MD.props.bigtrees) || []).map(([x, y, rm]) => [(x + 0.5) * TS, (y + 0.5) * TS, rm * TS / tm]);
   if (!l.length) {
@@ -670,6 +694,8 @@ function buildChunkHD(cx, cy) {
   const typ = new Uint8Array(W2 * W2), fS = new Uint8Array(W2 * W2), hasSide = new Uint8Array(W2 * W2);
   const rawR = new Float32Array(W2 * W2), rawS = new Float32Array(W2 * W2), FR = new Float32Array(W2 * W2), FS = new Float32Array(W2 * W2);
   for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) typ[j * W2 + i] = tileAt(x0 - M + i, y0 - M + j);
+  if (DOCKSEG.length && GS > 1) for (let k = 0; k < W2 * W2; k++) // el adoquín de los muelles es madera
+    if (typ[k] === T_PEAT && dockDist((x0 - M + k % W2 + 0.5) * TS, (y0 - M + ((k / W2) | 0) + 0.5) * TS) < 60) typ[k] = T_DOCK;
   // material "de afuera" de calles, agua y veredas: el vecino más común que no sea ninguna de esas (gana el parterre)
   for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) {
     const k = j * W2 + i, t = typ[k];
@@ -873,6 +899,30 @@ function buildChunkHD(cx, cy) {
     crossings(g, a, cxp, cyp);
   }
   for (const q of PITCHES) drawPitch(g, q, cxp, cyp);
+  // muelles: tablas de madera atravesadas, cada una con su tono, y las vigas de borde
+  for (const s of DOCKSEG) {
+    if (Math.max(s.ax, s.bx) + 80 < cxp || Math.min(s.ax, s.bx) - 80 > cxp + CPX || Math.max(s.ay, s.by) + 80 < cyp || Math.min(s.ay, s.by) - 80 > cyp + CPX) continue;
+    const nx2 = -s.uy, ny2 = s.ux, P = (t, d) => [s.ax + s.ux * t + nx2 * d - cxp, s.ay + s.uy * t + ny2 * d - cyp];
+    const quad = (t0, t1, d0, d1) => { g.beginPath(); g.moveTo(...P(t0, d0)); g.lineTo(...P(t1, d0)); g.lineTo(...P(t1, d1)); g.lineTo(...P(t0, d1)); g.closePath(); };
+    g.save(); quad(-s.wn, s.L + s.wp, -s.wn, s.wp); g.clip();
+    g.fillStyle = '#8a6444'; g.fill();
+    for (let t = -s.wn, b = 0; t < s.L + s.wp; t += 1.6, b++) {
+      const h = hash(Math.round(s.ax), b, 131);
+      g.fillStyle = h < 0.33 ? '#7a5638' : h < 0.66 ? '#936c48' : '#a07852'; quad(t, t + 1.35, -s.wn, s.wp); g.fill();
+      if (h > 0.9) { g.fillStyle = 'rgba(30,20,12,0.5)'; g.fillRect(...P(t + 0.4, (h - 0.95) * 40), 0.6, 0.6); } // clavos / nudos
+    }
+    g.fillStyle = 'rgba(40,26,16,0.75)'; quad(-s.wn, s.L + s.wp, -s.wn, -s.wn + 1.2); g.fill(); quad(-s.wn, s.L + s.wp, s.wp - 1.2, s.wp); g.fill();
+    g.restore();
+  }
+  // areneros de las plazas de juegos
+  for (const [bx, by, br] of PLAYGROUNDS) {
+    if (bx + br < cxp || bx - br > cxp + CPX || by + br < cyp || by - br > cyp + CPX) continue;
+    const lx0 = bx - cxp, ly0 = by - cyp;
+    g.fillStyle = '#7a5a3a'; g.beginPath(); g.arc(lx0, ly0, br + 1.5, 0, 7); g.fill();
+    g.fillStyle = '#dcc690'; g.beginPath(); g.arc(lx0, ly0, br, 0, 7); g.fill();
+    const r = rng(55);
+    for (let i = 0; i < 160; i++) { const a = r() * 6.283, d = br * Math.sqrt(r()); g.fillStyle = r() < 0.5 ? '#c8b07a' : '#ecd8a8'; g.fillRect(lx0 + Math.cos(a) * d, ly0 + Math.sin(a) * d, 1, 1); }
+  }
   // bajo la higuera del Parque Mitre: pasto ralo, hojarasca y raíces que serpentean por el piso
   for (const [bx, by, br] of BIGTREES) {
     if (bx + br < cxp || bx - br > cxp + CPX || by + br < cyp || by - br > cyp + CPX) continue;
@@ -2231,13 +2281,20 @@ function drawRot(img, x, y, a, ox, oy) {
 const FIRE_COL = ['#7a1a10', '#d04818', '#f09028', '#fff0a0'];
 const GLYPH_W = 3;
 function prefetchChunk(ox, oy, bw, bh) {
-  // arma de a un chunk por cuadro alrededor de la vista, antes de que haga falta
-  const m = CPX * 0.75, c0x = Math.floor((ox - m) / CPX), c1x = Math.floor((ox + bw + m) / CPX);
-  const c0y = Math.floor((oy - m) / CPX), c1y = Math.floor((oy + bh + m) / CPX);
+  // arma de a un chunk por cuadro alrededor de la vista, antes de que haga falta; primero los que quedan
+  // hacia donde va el jugador (adelanta ~2 s de viaje), así manejando rápido no aparecen de golpe
+  const vx = player.car ? player.car.vx : player.vx || 0, vy = player.car ? player.car.vy : player.vy || 0;
+  const ax = clamp(vx * 2, -CPX * 2, CPX * 2), ay = clamp(vy * 2, -CPX * 2, CPX * 2);
+  const m = CPX * 0.75, c0x = Math.floor((ox - m + Math.min(0, ax)) / CPX), c1x = Math.floor((ox + bw + m + Math.max(0, ax)) / CPX);
+  const c0y = Math.floor((oy - m + Math.min(0, ay)) / CPX), c1y = Math.floor((oy + bh + m + Math.max(0, ay)) / CPX);
+  const mx = (ox + bw / 2) / CPX - 0.5, my = (oy + bh / 2) / CPX - 0.5;
+  let best = null, bd = Infinity;
   for (let cy = c0y; cy <= c1y; cy++) for (let cx = c0x; cx <= c1x; cx++) {
-    if (cx < -1 || cy < -1 || cx * CH > W || cy * CH > H) continue;
-    if (!chunks.has(cy * 4096 + cx)) { getChunk(cx, cy); return; }
+    if (cx < -1 || cy < -1 || cx * CH > W || cy * CH > H || chunks.has(cy * 4096 + cx)) continue;
+    const d = (cx - mx) ** 2 + (cy - my) ** 2; // el más cercano al centro de la vista primero
+    if (d < bd) { bd = d; best = [cx, cy]; }
   }
+  if (best) getChunk(best[0], best[1]);
 }
 let builtThisFrame = 0;
 function render() {
@@ -2474,7 +2531,7 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 // para depurar desde la consola
-window.__game = { player, cars, peds, cam, tileAt, MD, crime, wantedLevel, buildChunk, BRIDGES, bridgeAt, GANTRY, BLD, get R3() { return R3; },
+window.__game = { player, cars, peds, cam, tileAt, MD, crime, wantedLevel, buildChunk, BRIDGES, bridgeAt, bridgePoint, GANTRY, BLD, get R3() { return R3; },
   step: n => { for (let i = 0; i < n; i++) { update(STEP); for (const k in pressed) pressed[k] = false; } } };
 // API pública para los módulos (ver el comentario de "API PARA MÓDULOS")
 {

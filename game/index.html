@@ -147,9 +147,10 @@
     #minimap { width: 120px; height: 120px; } #hint { display: none; }
     #m-prompt, #m-sub, #m-dlg { bottom: 12px; left: 150px; right: 150px; }
     #m-dlg .m-face { width: 48px; height: 48px; } #m-dlg .m-text { font-size: 9px; min-height: 32px; line-height: 1.6; }
-    #m-hud { top: 8px; } .m-li-wrap { max-height: 46vh; } #m-banner, #m-done, #m-fail { top: 18%; }
+    .m-li-wrap { max-height: 46vh; } #m-banner, #m-done, #m-fail { top: 18%; }
   }
-  @media (max-height: 520px) and (max-width: 640px) { #m-hud { top: 8px; left: auto; right: 12px; max-width: calc(100vw - 280px); } }
+  @media (max-height: 520px) and (min-width: 861px) { #m-hud { top: 8px; } }
+  @media (max-height: 520px) and (max-width: 640px) { #m-prompt, #m-sub, #m-dlg { left: 128px; right: 140px; } #m-hud { top: 68px; left: auto; right: 12px; max-width: calc(100vw - 268px); } }
 </style>
 </head>
 <body>

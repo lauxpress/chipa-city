@@ -14,17 +14,17 @@
 
 window.MISSION_PLACES = {
   // Centro histórico (coordenadas verificadas con data/osm_raw.json)
-  casa_gobierno:    [-27.46364, -58.83864], // Casa de Gobierno de la Provincia de Corrientes
+  casa_gobierno:    [-27.46360, -58.83890], // Casa de Gobierno de la Provincia de Corrientes
   plaza_25_mayo:    [-27.46343, -58.83963],
-  la_merced:        [-27.46400, -58.84008], // Iglesia Nuestra Señora de la Merced
+  la_merced:        [-27.46382, -58.84013], // Iglesia Nuestra Señora de la Merced
   jefatura:         [-27.46241, -58.83944], // Jefatura de Policía (donde estaba el Cabildo)
-  san_francisco:    [-27.46258, -58.83527], // Iglesia y convento San Francisco Solano
+  san_francisco:    [-27.46262, -58.83512], // Iglesia y convento San Francisco Solano
   museo_historico:  [-27.46660, -58.83741], // Museo Histórico de Corrientes
   casa_nandereco:   [-27.46419, -58.83580], // Centro de Interpretación del Chamamé y el Carnaval
-  catedral:         [-27.46963, -58.83134], // Catedral Nuestra Señora del Rosario
+  catedral:         [-27.46921, -58.83131], // Catedral Nuestra Señora del Rosario
   plaza_cabral:     [-27.46869, -58.83121],
   plaza_torrent:    [-27.47166, -58.83307],
-  cruz_milagros:    [-27.47231, -58.84022], // Iglesia Santísima Cruz de los Milagros
+  cruz_milagros:    [-27.47180, -58.84029], // Iglesia Santísima Cruz de los Milagros
   plaza_cruz:       [-27.47110, -58.84005], // Plaza La Cruz
   mercado:          [-27.47679, -58.83612], // Mercado Municipal de Productos Frescos
   puesto_banderas:  [-27.47606, -58.83527], // Av. 3 de Abril y Córdoba
@@ -50,7 +50,7 @@ window.MISSION_PLACES = {
   santuario_gil:    [-27.47934, -58.82884], // altarcito del Gauchito Gil (inventado), Av. Maipú y Necochea
   // Norte: Parque Mitre
   parque_mitre:     [-27.45939, -58.82938],
-  higuera:          [-27.45925, -58.82905], // Higuera / Gomero de la India (posición aproximada dentro del parque)
+  higuera:          [-27.46002, -58.82988], // Higuera / Gomero de la India (posición aproximada dentro del parque)
   regatas:          [-27.45909, -58.83028], // Club de Regatas Corrientes
 };
 

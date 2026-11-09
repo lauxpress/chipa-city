@@ -75,6 +75,22 @@
     await new Promise(r => setTimeout(r, 1200));
     __scenesCur.debugStep(steps); return name ? await __shot(name) : 'ok';
   };
+  // avanza n cuadros en tandas (deja correr las promesas entre tandas); skip=true pasa los diálogos con ENTER
+  window.__adv = async (frames = 60, skip = true, chunk = 4) => {
+    const s = __scenesCur;
+    for (let f = 0; f < frames && !s.done; f += chunk) {
+      if (skip && s.busy && s.dialogOpen && s.dialogOpen()) s.hits.Enter = true;
+      s.debugStep(chunk); await new Promise(r => setTimeout(r, 0));
+    }
+    return s.done;
+  };
+  // corre hasta que la escena termine (o se acabe el tiempo de juego), con capturas cada 'every' segundos
+  window.__run = async (secs, every = 0, prefix = 'run') => {
+    const s = __scenesCur, shots = [];
+    for (let t = 0; t < secs && !s.done; t += 1) { await __adv(60); if (every && t % every === every - 1) shots.push(await __shot(prefix + '_' + t)); }
+    if (s.done) for (let k = 0; k < 40 && document.querySelector('.cs3d-root'); k++) { s.debugStep(10); await new Promise(r => setTimeout(r, 0)); }
+    return shots;
+  };
   window.__key = (code, frames = 20, after = 25) => {
     const s = __scenesCur; window.dispatchEvent(new KeyboardEvent('keydown', { code }));
     s.debugStep(frames); window.dispatchEvent(new KeyboardEvent('keyup', { code })); s.debugStep(after);

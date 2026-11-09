@@ -73,10 +73,11 @@ function boot() {
     }
     return null;
   }
-  // punto caminable: primero vereda/pasto cerca, si no cualquier cosa no sólida
+  // punto caminable: primero vereda/pasto/peatonal a menos de ~40 m (hay lugares del guion que caen adentro de un
+  // edificio o en el agua), si no cualquier cosa no sólida
   function snapWalk(x, y) {
     if (!solidT(C.tileAtPx(x, y)) && WALK_CALM.has(C.tileAtPx(x, y))) return [x, y];
-    const near = nearestTile(x, y, t => WALK_CALM.has(t), 6);
+    const near = nearestTile(x, y, t => WALK_CALM.has(t) && !solidT(t), Math.ceil(m2px(40) / TS));
     if (near) return near;
     if (!solidT(C.tileAtPx(x, y))) return [x, y];
     return nearestTile(x, y, t => !solidT(t), 60) || [x, y];
@@ -104,16 +105,36 @@ function boot() {
     }
     return nearestTile(dp.x, dp.y, t => t === T.SIDE, 12) || snapWalk(dp.x, dp.y);
   }
+  const POI_ALIAS = { cruz_milagros: 'cruz_de_los_milagros', plaza_cruz: 'plaza_de_la_cruz', santuario_gil: 'gauchito_gil', trabajo_playon: 'dpec' };
+  function poiFor(name) {
+    const P = window.MAPDATA && window.MAPDATA.poi, MD = C.MD && C.MD.poi;
+    const tbl = P || MD; if (!tbl) return null;
+    const t = tbl[POI_ALIAS[name] || name] || tbl[name];
+    if (!Array.isArray(t) || !isFinite(t[0]) || !isFinite(t[1])) return null;
+    const p = [(t[0] + 0.5) * TS, (t[1] + 0.5) * TS];
+    const pl = (window.MISSION_PLACES || {})[name];
+    if (Array.isArray(pl)) { const q = C.ll2px(pl[0], pl[1]); if (Math.hypot(q[0] - p[0], q[1] - p[1]) > m2px(120)) return null; } // por las dudas: que sea el mismo lugar
+    return p;
+  }
   // lugar del guion → [x, y] en px (lat/lon, nombre de MISSION_PLACES o {x, y} en px)
   function resolveAt(at, fallback) {
     if (at == null) return fallback ? [fallback.x, fallback.y] : null;
     if (typeof at === 'string') {
+      // puertas reales del mapa (MAPDATA.poi, en tiles) cuando existen y quedan cerca del lugar del guion
+      const poi = poiFor(at);
+      if (poi) return poi;
       const pl = (window.MISSION_PLACES || {})[at] || (FALLBACK_PLACES[at]);
       if (!pl) { console.warn('[misiones] lugar desconocido:', at); return fallback ? [fallback.x, fallback.y] : null; }
       return resolveAt(pl, fallback);
     }
     if (Array.isArray(at) && at.length >= 2 && isFinite(at[0]) && isFinite(at[1])) {
-      if (Math.abs(at[0]) <= 90 && Math.abs(at[1]) <= 180) return C.ll2px(at[0], at[1]);
+      if (Math.abs(at[0]) <= 90 && Math.abs(at[1]) <= 180) {
+        // si las coordenadas son las de un lugar con nombre (los dadores), usamos su puerta del mapa
+        for (const [k, v] of Object.entries(window.MISSION_PLACES || {})) {
+          if (Array.isArray(v) && Math.abs(v[0] - at[0]) < 2e-5 && Math.abs(v[1] - at[1]) < 2e-5) { const poi = poiFor(k); if (poi) return poi; break; }
+        }
+        return C.ll2px(at[0], at[1]);
+      }
       return [at[0], at[1]]; // ya en px
     }
     if (typeof at === 'object' && isFinite(at.x) && isFinite(at.y)) return [at.x, at.y];
@@ -554,7 +575,8 @@ function boot() {
       let [x, y] = snapWalk(at[0], at[1]);
       const taken = [...givers.values()].find(g => d2(g.x, g.y, x, y) < 26 * 26);
       if (taken) {
-        if (st !== 'disponible') continue;
+        const same = taken.m.giver && m.giver && taken.m.giver.name === m.giver.name;
+        if (st !== 'disponible' && same) continue;   // la misma persona: se ve una vez (con la misión nueva)
         [x, y] = snapWalk(x + 22, y + 10);
       }
       const color = st === 'completada' ? '#9aa0a8' : '#ff9f3f';
@@ -738,7 +760,7 @@ function boot() {
     const st = run.m.steps[run.i] || {}, cp = (st.type === 'scene' || st.type === 'futbol') && run.i > 0 ? { i: run.i, flags: Object.assign({}, run.flags) } : null;
     failed = { m: run.m, reason: reason || 'MISIÓN FALLIDA', checkpoint: cp };
     ui.fail.innerHTML = `<div class="m-big red">MISIÓN FALLIDA</div><div class="m-reason">${esc(failed.reason)}</div>` +
-      `<div class="m-keys">${cp ? 'ENTER: reintentar la escena · R: desde el principio' : 'ENTER: reintentar'} · ESC: salir</div>`;
+      `<div class="m-keys">${cp ? (st.type === 'futbol' ? 'ENTER: revancha' : 'ENTER: reintentar la escena') + ' · R: desde el principio' : 'ENTER: reintentar'} · ESC: salir</div>`;
     show(ui.fail, true); failT = 15;
     C.sfx.blip(220, 0.3, 0.15); setTimeout(() => C.sfx.blip(150, 0.5, 0.15), 260);
     giverMarkers(true);
@@ -775,15 +797,15 @@ function boot() {
     // flags del guion: persisten entre misiones
     Object.assign(progress.flags, run.flags);
     const prevBest = progress.done[m.id] && progress.done[m.id].best;
-    progress.done[m.id] = { t: Date.now(), best: prevBest ? Math.min(prevBest, Math.round(run.t)) : Math.round(run.t) };
+    const whole = !run.from; // desde un punto de control el tiempo no cuenta como récord
+    progress.done[m.id] = { t: Date.now(), best: !whole ? (prevBest || null) : prevBest ? Math.min(prevBest, Math.round(run.t)) : Math.round(run.t) };
     saveProgress();
-    const before = new Set([...givers.keys()]);
     placeGivers();
-    const nuevas = [...givers.keys()].filter(id => !before.has(id)).map(id => byId(id).title);
+    const nuevas = replay ? [] : MISSIONS.filter(q => (q.unlock || []).includes(m.id) && statusOf(q) === 'disponible').map(q => q.title);
     const sgn = v => (v < 0 ? '-$' : '+$') + Math.abs(v);
     ui.done.innerHTML = `<div class="m-big">¡MISIÓN CUMPLIDA!</div><div class="m-money">${sgn(base + bonus)}</div>` +
       run.bonus.map(b => `<div class="m-bonus">${esc(b.label)}${b.money ? ' ' + sgn(b.money) : ''}</div>`).join('') +
-      `<div class="m-bonus dim">TIEMPO ${fmtTime(run.t)}</div>` +
+      (whole ? `<div class="m-bonus dim">TIEMPO ${fmtTime(run.t)}</div>` : "") +
       nuevas.map(t => `<div class="m-bonus new">NUEVA MISIÓN: ${esc(t)}</div>`).join('');
     show(ui.done, true); doneT = 6;
     [523, 659, 784, 1046].forEach((f, k) => setTimeout(() => C.sfx.blip(f, 0.16, 0.12), k * 140));
@@ -827,6 +849,11 @@ function boot() {
   // los pasos que necesitan vehículo: devuelve el auto si estás arriba del que corresponde; si no, orienta al jugador
   function inVehicle(run) {
     const v = run.vehicle, car = C.player.car;
+    if (v && (v.wreck || !C.cars.includes(v)) && run.step && run.step.type === 'goto') {
+      // para llegar a un lugar alcanza con cualquier auto: no se pierde la misión por haber roto el de la misión
+      run.vehicle = null; banner(`<small>${esc(vehName(v.kind)).toUpperCase()} QUEDÓ HECHO PELOTA</small><br>CONSEGUITE OTRO AUTO`, 2.6, 'small');
+      return inVehicle(run);
+    }
     if (v) {
       if (v.wreck || !C.cars.includes(v)) { failRun(run, `¡Hiciste pelota ${vehName(v.kind)}!`); return null; }
       if (car === v) { if (v.burn > 0) run.override = { hint: '¡SE PRENDE FUEGO! ¡BAJATE!' }; return v; }
@@ -1339,20 +1366,32 @@ function boot() {
     }
     if (r.ok === false) {
       const quit = (r.data && r.data.quit) || r.abandono;
-      failRun(run, quit ? 'ABANDONASTE' : st.onFail || r.reason || (st.opts && (st.opts.textoPierde || st.opts.textoPerder)) || 'NO LO LOGRASTE');
+      const marcador = r.golesJugador != null ? `Perdieron ${r.golesJugador} a ${r.golesRival}${r.penalesJugador != null ? ` (penales ${r.penalesJugador}-${r.penalesRival})` : ''}. ¡Revancha!` : null;
+      failRun(run, quit ? 'ABANDONASTE' : st.onFail || r.reason || (st.opts && (st.opts.textoPierde || st.opts.textoPerder)) || marcador || 'NO LO LOGRASTE');
       return;
     }
     return r;
   }
+  const SCENE_EXIT = { tunel: 'boca_tunel' };
   STEPS.scene = async (st, run) => {
     const r = await external(run, st, 'scenes', M => M.play(st.id, Object.assign({ mission: run.m.id, flags: Object.assign({}, run.flags) }, st.opts || {})), ((st.opts && st.opts.titulo) || st.id || '').toUpperCase());
-    if (r && active === run) { run.stats['escena_' + st.id] = r.score != null ? r.score : true; if (r.data && typeof r.data === 'object' && r.data.flags) Object.assign(run.flags, r.data.flags); }
+    if (r && active === run) {
+      run.stats['escena_' + st.id] = r.score != null ? r.score : true;
+      if (r.data && typeof r.data === 'object' && r.data.flags) Object.assign(run.flags, r.data.flags);
+      // escenas que terminan en otro lugar del mapa (el túnel sale a la Costanera)
+      const exitAt = st.exitAt || (st.opts && st.opts.salida) || SCENE_EXIT[st.id];
+      const ex = exitAt && resolveAt(exitAt, null);
+      if (ex) {
+        if (C.player.car) { const c = C.player.car; c.mode = 'phys'; c.vx = c.vy = 0; C.player.car = null; C.sfx.engine(false, 0, false); }
+        const [x, y] = snapWalk(ex[0], ex[1]); C.teleport(x, y);
+      }
+    }
   };
   STEPS.futbol = async (st, run) => {
     const r = await external(run, st, 'futbol', M => M.play(Object.assign({ mission: run.m.id }, st.opts || {})), 'FÚTBOL');
     if (r && active === run) {
       run.stats.futbol = { gj: r.golesJugador, gr: r.golesRival };
-      if (r.golesJugador != null) banner(`<small>RESULTADO</small><br>${r.golesJugador} a ${r.golesRival}`, 2.4, 'small');
+      if (r.golesJugador != null) banner(`<small>RESULTADO</small><br>${r.golesJugador} a ${r.golesRival}${r.penalesJugador != null ? ` <small>(PENALES ${r.penalesJugador}-${r.penalesRival})</small>` : ''}`, 2.6, 'small');
     }
   };
 
@@ -1397,7 +1436,7 @@ function boot() {
   // ============================================================ HUD DE OBJETIVO
   function updateHud() {
     const run = active;
-    if (!run) { show(ui.hud, false); return; }
+    if (!run || C.modal) { show(ui.hud, false); return; }
     const o = run.override;
     const hint = (o && o.hint) || run.hint;
     const tgt = (o && o.target) || run.target;

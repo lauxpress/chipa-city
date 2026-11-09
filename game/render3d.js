@@ -1479,7 +1479,7 @@ window.createRender3D = function (G) {
         const [r1, r2, r3] = rnd[b], a = ang + (r1 - 0.5) * 0.5, R = f.R * (0.8 + r2 * 0.4);
         const x = cx + Math.cos(a) * R + (r3 - 0.5) * 30, y = cy + Math.sin(a) * R * 0.75 + (r1 - 0.5) * 30, z = f.z + (r2 - 0.5) * 30 + Math.sin(tNow + b) * 4;
         const hx = -Math.sin(a), hy = Math.cos(a) * 0.75, hl = Math.hypot(hx, hy), ux = hx / hl, uy = hy / hl, vx = -uy, vy = ux; // rumbo y ala
-        const flap = Math.sin(tNow * (f.gull ? 6 : 11) + b * 1.7) * (f.gull ? 2.2 : 1.6), span = f.gull ? 5.5 : 4, L = f.gull ? 2.6 : 2;
+        const flap = Math.sin(tNow * (f.gull ? 6 : 11) + b * 1.7) * (f.gull ? 2.2 : 1.6), span = f.gull ? 7 : 5.5, L = f.gull ? 3.2 : 2.6;
         const P = (s, w, dz) => { pos[o++] = x + ux * s + vx * w; pos[o++] = -(y + uy * s + vy * w); pos[o++] = z + dz; };
         P(L, 0, 0); P(-L * 0.6, 0, 0); P(-L * 0.1, span, flap);   // ala izquierda
         P(L, 0, 0); P(-L * 0.6, 0, 0); P(-L * 0.1, -span, flap);  // ala derecha

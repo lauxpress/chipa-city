@@ -1,7 +1,21 @@
 // CHIPA CITY — escenas 3D (window.Chipa.scenes)
 // Framework común: renderer propio + post-proceso pixelado (shader a mano) + HUD en DOM + entrada + ciclo de vida.
 // Cada escena vive en game/scenes/<id>.js y se carga la primera vez que se juega (ChipaScenes.register).
-//   Chipa.scenes.play(id, opts) → Promise<{ok, score?, data?}>
+//   Chipa.scenes.play(id, opts) → Promise<{ok, score?, reason?, data?}>   (reason: texto de derrota que muestra missions.js)
+//   Chipa.scenes.has(id) → si la escena existe en el catálogo
+//
+// Cambios de API (todos compatibles hacia atrás; lo viejo sigue igual):
+//   · st.sfx.tone/noise aceptan o.pan (-1..1); st.sfx.whistle({pan, vol, delay}) = silbido "fiu-fiuuu".
+//   · st.say/st.choose hacen cola si ya hay un diálogo abierto (antes se pisaban y st.busy quedaba colgado);
+//     la tecla que cierra un diálogo ya no dispara también st.action(). st.dialogOpen() → bool.
+//   · st.lightShaft({x, y, z, height, rTop, rBottom, color, intensity}) → Mesh: haz de luz (god ray) aditivo.
+//   · st.thirdPerson({obj, collider, radius, speed, dist, pitch, camYaw, bounds}) → controlador de personaje en
+//     tercera persona (WASD relativo a cámara, SHIFT corre, Q/E giran la cámara). Llamar ctl.update(dt).
+//   · st.seeThrough(material, radio) → agujerea con tramado lo que tape a st.seeTarget (thirdPerson lo fija solo).
+//   · st.nearest(items, x, z) → el {x, z, r} más cercano dentro de su radio (para carteles de interacción).
+//   · U.dampAngle(a, b, k, dt).
+//   · Depuración: cada escena puede exponer instance.debug (window.__scenesCur.instance.debug) para ganar/perder
+//     o resolver puzzles desde la consola; test_scenes.html trae __adv/__run/__goM para probar sin la pestaña al frente.
 'use strict';
 (function () {
   const T = window.THREE;
@@ -23,6 +37,8 @@
   U.clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   U.lerp = (a, b, t) => a + (b - a) * t;
   U.damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
+  // como damp pero para ángulos (toma el camino corto)
+  U.dampAngle = (a, b, k, dt) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + d * (1 - Math.exp(-k * dt)); };
   U.ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   U.hash = s => { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   U.rng = seed => {
@@ -628,6 +644,84 @@
       });
       const mesh = new T.Mesh(new T.PlaneGeometry(1, 1), m); mesh.frustumCulled = false; mesh.renderOrder = 6;
       return mesh;
+    };
+    // haz de luz volumétrico falso (god ray): cono abierto aditivo que se desvanece en los bordes y abajo
+    st.lightShaft = (o = {}) => {
+      const h = o.height || 6, geo = new T.CylinderGeometry(o.rTop || 0.5, o.rBottom || 1.2, h, o.seg || 10, 1, true);
+      geo.translate(0, h / 2, 0);
+      const m = new T.ShaderMaterial({
+        uniforms: { uTime: { value: 0 }, uColor: { value: U.C(o.color || 0xffe0a0).multiplyScalar(o.intensity || 0.35) }, uSeed: { value: o.seed || Math.random() * 10 } },
+        vertexShader: 'varying vec2 vUv; varying float vF; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vec3 n = normalize(normalMatrix * normal); vF = abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix * mv; }',
+        fragmentShader: `uniform vec3 uColor; uniform float uTime, uSeed; varying vec2 vUv; varying float vF;
+          void main(){ float a = pow(vF, 2.5) * smoothstep(0.0, 0.3, vUv.y) * (0.3 + 0.7 * vUv.y);
+            a *= 0.8 + 0.2 * sin(uTime * 0.9 + uSeed + vUv.y * 5.0) * sin(uTime * 0.53 + uSeed * 2.0 + vUv.x * 12.0);
+            a = floor(a * 7.0 + 0.5) / 7.0; if (a <= 0.0) discard; gl_FragColor = vec4(uColor * a, 1.0); }`,
+        transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+      });
+      const mesh = new T.Mesh(geo, m); mesh.userData.flame = true; mesh.renderOrder = 7; mesh.frustumCulled = false;
+      if (o.x !== undefined) mesh.position.set(o.x, o.y || 0, o.z);
+      return mesh;
+    };
+    // ---- tercera persona: mueve o.obj (un U.person o un Group) relativo a la cámara y la sigue de atrás/arriba.
+    // o: {obj, collider (U.Collider), radius, speed, run, dist, pitch, camYaw, lookH, bounds:[x0,z0,x1,z1]}. Q/E giran la cámara 45°.
+    // Devuelve el controlador: llamá ctl.update(dt) en tu update. ctl.enabled=false lo frena; ctl.slow multiplica la velocidad.
+    st.thirdPerson = (o = {}) => {
+      const C = { obj: o.obj, speed: o.speed || 3.4, runK: o.run || 1.6, radius: o.radius || 0.32, collider: o.collider || null, bounds: o.bounds || null,
+        camYaw: o.camYaw || 0, camYawT: o.camYaw || 0, dist: o.dist || 8, pitch: o.pitch || 0.95, lookH: o.lookH || 1.1, camDamp: o.camDamp || 7,
+        vel: new T.Vector3(), moving: 0, enabled: true, face: o.face || 0, slow: 1, first: true, rotate: o.rotate !== false };
+      const tgt = new T.Vector3(), camP = new T.Vector3();
+      C.forward = () => new T.Vector3(-Math.sin(C.camYaw), 0, -Math.cos(C.camYaw));
+      C.update = dt => {
+        const p = C.obj.position;
+        if (C.rotate && !st.busy) { if (st.hit('KeyQ')) C.camYawT += Math.PI / 4; if (st.hit('KeyE')) C.camYawT -= Math.PI / 4; }
+        C.camYaw = U.damp(C.camYaw, C.camYawT, 7, dt);
+        let ax = 0, az = 0;
+        if (C.enabled && !st.busy) {
+          const a = st.axis(), s = Math.sin(C.camYaw), c = Math.cos(C.camYaw);
+          ax = c * a.x - s * a.y; az = -s * a.x - c * a.y;
+        }
+        const len = Math.hypot(ax, az); if (len > 1) { ax /= len; az /= len; }
+        const sp = C.speed * (st.down('ShiftLeft', 'ShiftRight') ? C.runK : 1) * C.slow;
+        C.vel.x = U.damp(C.vel.x, ax * sp, 12, dt); C.vel.z = U.damp(C.vel.z, az * sp, 12, dt);
+        p.x += C.vel.x * dt; p.z += C.vel.z * dt;
+        if (C.collider) C.collider.resolve(p, C.radius);
+        if (C.bounds) { p.x = U.clamp(p.x, C.bounds[0], C.bounds[2]); p.z = U.clamp(p.z, C.bounds[1], C.bounds[3]); }
+        C.moving = Math.hypot(C.vel.x, C.vel.z);
+        if (len > 0.1) C.face = Math.atan2(ax, az);
+        C.obj.rotation.y = U.dampAngle(C.obj.rotation.y, C.face, 12, dt);
+        if (C.obj.userData.legL) U.animPerson(C.obj, C.moving, dt);
+        tgt.set(p.x, p.y + C.lookH, p.z);
+        const hd = C.dist * Math.cos(C.pitch), vd = C.dist * Math.sin(C.pitch);
+        camP.set(tgt.x + Math.sin(C.camYaw) * hd, tgt.y + vd, tgt.z + Math.cos(C.camYaw) * hd);
+        if (C.first) { camera.position.copy(camP); C.first = false; } else camera.position.lerp(camP, 1 - Math.exp(-C.camDamp * dt));
+        camera.lookAt(tgt);
+        st.seeTarget = tgt; // para st.seeThrough
+      };
+      return C;
+    };
+    // ---- ver a través: los fragmentos de este material que tapan a st.seeTarget se agujerean con tramado (dither)
+    const seeU = { uSeeCam: { value: new T.Vector3() }, uSeeTgt: { value: new T.Vector3() }, uSeeOn: { value: 0 } };
+    st.seeTarget = null;
+    st.seeThrough = (mat, radius = 1.3) => {
+      const R = radius.toFixed(2), R2 = (radius * 0.4).toFixed(2);
+      mat.onBeforeCompile = sh => {
+        Object.assign(sh.uniforms, seeU);
+        sh.vertexShader = 'varying vec3 vSeeWP;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vSeeWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = 'uniform vec3 uSeeCam, uSeeTgt; uniform float uSeeOn; varying vec3 vSeeWP;\n' + sh.fragmentShader.replace('void main() {', `void main() {
+          if (uSeeOn > 0.5) { vec3 ab = uSeeTgt - uSeeCam; float tt = dot(vSeeWP - uSeeCam, ab) / dot(ab, ab);
+            if (tt > 0.0 && tt < 0.96) { float dd = length(vSeeWP - (uSeeCam + ab * tt)); float k = smoothstep(${R}, ${R2}, dd);
+              vec2 q = mod(floor(gl_FragCoord.xy), 2.0); float th = fract((q.x * 2.0 + q.y * 3.0) / 4.0) + 0.125; if (k > th) discard; } }`);
+      };
+      mat.customProgramCacheKey = () => 'see' + R;
+      mat.needsUpdate = true;
+      return mat;
+    };
+    st.updaters.push(() => { if (st.seeTarget) { seeU.uSeeCam.value.copy(camera.position); seeU.uSeeTgt.value.copy(st.seeTarget); seeU.uSeeOn.value = 1; } else seeU.uSeeOn.value = 0; });
+    // el interactuable más cercano dentro de su radio: items [{x, z, r, on?}] → item o null
+    st.nearest = (items, x, z) => {
+      let best = null, bd = 1e9;
+      for (const it of items) { if (it.on === false) continue; const d = Math.hypot(it.x - x, it.z - z); if (d < (it.r || 1.4) && d < bd) { bd = d; best = it; } }
+      return best;
     };
     st.shakeAmt = 0;
     st.shake = a => { st.shakeAmt = Math.max(st.shakeAmt, a); };
