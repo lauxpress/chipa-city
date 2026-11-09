@@ -128,7 +128,7 @@ for _, at, pts in sorted(areas, key=lambda a: -a[0]):
     dr.polygon(pts, fill=at)
 
 # 3) Edificios: los de OSM (mapeados a mano) + los de Microsoft (detectados del satélite)
-osm_polys, osm_levels, osm_names = [], [], []
+osm_polys, osm_levels, osm_names, osm_ids = [], [], [], []
 for w in ways.values():
     t = w.get("tags", {})
     if ((t.get("building", "no") != "no") or (t.get("amenity") == "place_of_worship" and t.get("name"))) and is_closed(w):
@@ -138,6 +138,7 @@ for w in ways.values():
         lv = "".join(ch for ch in t.get("building:levels", "") if ch.isdigit())
         osm_levels.append(int(lv) if lv else None)
         osm_names.append(t.get("name", ""))
+        osm_ids.append(w["id"])
 grid = np.array(img, dtype=np.uint8)
 ms_polys = []
 from shapely.geometry import Polygon as _SPoly
@@ -838,11 +839,312 @@ for am, bm in [(-HLA + 9, -HLB - 24), (4, -HLB - 24), (HLA - 9, -HLB - 24), (-HL
     work_props.setdefault("floodlights", []).append([round(x, 2), round(y, 2), 30])
 print("estadio de Huracán: listo (cancha %.0f x %.0f m)" % (2 * HLA, 2 * HLB))
 
+# ==== Etapa 2 (cartógrafo): Plaza de la Cruz, Parque Mitre, puntos de misión ==================================
+# Las capturas satelitales del dueño no se guardan en el repo: cada lugar se ubica con una afín (mínimos cuadrados)
+# calibrada en esquinas de calles de OSM medidas sobre la captura, y las formas se dan en píxeles de la captura.
+from shapely.geometry import Point as _PtE
+REFT = json.loads((ROOT / "data" / "arboles_referencia.json").read_text(encoding="utf8"))
+drop_osm = set()   # ids de edificios de OSM que se rehacen a mano
+poi = {}           # puntos de misión: nombre -> [tx, ty] (tile caminable frente a la puerta)
+GROUND = [YARD, BLOCK, OSMB, GRASS, FOOTPATH, DIRT, PARKING]
+NOTREE_T = {ROAD, WATER, BLOCK, OSMB, BRIDGE, BRIDGEW, MEDIAN, PARKING}
+
+
+def affine_lsq(pairs):
+    A = np.array([[u, v, 1] for (u, v), _ in pairs], float)
+    X = np.array([t for _, t in pairs], float)
+    M = np.linalg.lstsq(A, X, rcond=None)[0]
+    return lambda u, v: (float(u * M[0, 0] + v * M[1, 0] + M[2, 0]), float(u * M[0, 1] + v * M[1, 1] + M[2, 1]))
+
+
+def add_path(pts, width=1):  # sendero: polilínea suave para el dibujo + tiles de sendero (pasto sin arboleda al azar)
+    paths.append([round(c, 1) for xy in pts for c in xy])
+    im_ = Image.new("L", (W, H), 0); ImageDraw.Draw(im_).line(pts, fill=1, width=width)
+    m = (np.array(im_) > 0) & np.isin(grid, [GRASS, YARD])
+    grid[m] = FOOTPATH
+
+
+def drop_paths_in(poly):  # saca los senderos de OSM que caen enteros adentro (se redibujan desde la captura)
+    keep = [pl for pl in paths if not all(poly.contains(_PtE(x, y)) for x, y in zip(pl[0::2], pl[1::2]))]
+    paths[:] = keep
+
+
+def add_trees(lst, f, skip=None, kind=0):
+    n = 0
+    for u, v, r in lst:
+        x, y = f(u, v)
+        if not (0 <= x < W and 0 <= y < H) or grid[int(y), int(x)] in NOTREE_T:
+            continue
+        if skip and skip(x, y):
+            continue
+        work_props["trees"].append([round(x, 2), round(y, 2), r, kind]); n += 1
+    return n
+
+
+def lot(poly, val, over=GROUND, excl=True):  # rellena un terreno y saca los edificios genéricos que caen adentro
+    fill(poly, val, over)
+    if excl:
+        excl_polys.append(_P(poly)); excl_osm.append(_P(poly))
+
+
+def building(poly, name, floors, style=2, pal=0, solid=True, over=None):
+    if solid:
+        fill(poly, BLOCK, over or [YARD, BLOCK, OSMB, GRASS, FOOTPATH, DIRT, PARKING, PEATONAL])
+    work_buildings.append((10 + style * 4 + pal, floors, poly, name))
+    excl_polys.append(_P(poly)); excl_osm.append(_P(poly))
+
+
+WALK = (SIDEWALK, PEATONAL)
+
+
+def near_tile(x, y, kinds=WALK, maxr=40):  # el tile de esos tipos más cercano a (x, y)
+    cx, cy = int(x), int(y)
+    best = None
+    for r in range(0, maxr):
+        for ty in range(cy - r, cy + r + 1):
+            for tx in range(cx - r, cx + r + 1):
+                if max(abs(tx - cx), abs(ty - cy)) != r or not (0 <= tx < W and 0 <= ty < H):
+                    continue
+                if grid[ty, tx] in kinds:
+                    d = (tx + 0.5 - x) ** 2 + (ty + 0.5 - y) ** 2
+                    if best is None or d < best[0]:
+                        best = (d, [tx, ty])
+        if best and r > 1 and best[0] < (r - 1) ** 2:
+            break
+    return best[1] if best else None
+
+
+def osm_way_pts(wid):
+    return way_pts(ways[wid]) if wid in ways else None
+
+
+def bilin(c):  # cuadrilátero nw, ne, sw, se -> f(u, v) con u de oeste a este y v de norte a sur (0..1)
+    def f(u, v):
+        a = [c[0][i] * (1 - u) + c[1][i] * u for i in (0, 1)]
+        b = [c[2][i] * (1 - u) + c[3][i] * u for i in (0, 1)]
+        return (a[0] * (1 - v) + b[0] * v, a[1] * (1 - v) + b[1] * v)
+    return f
+
+
+RQ = lambda f, u0, v0, u1, v1: [f(u0, v0), f(u1, v0), f(u1, v1), f(u0, v1)]
+
+# ---- Plaza de la Cruz (Bolívar / Belgrano / Buenos Aires / Salta) y sus manzanas: captura img37 ---------------
+BA_BOL, SA_BOL = node_of("Bolívar", "Buenos Aires"), node_of("Bolívar", "Salta")
+BA_BEL, SA_BEL = node_of("Belgrano", "Buenos Aires"), node_of("Belgrano", "Salta")
+BA_SM, SA_SM = node_of("San Martín", "Buenos Aires"), node_of("San Martín", "Salta")
+BA_MO, SA_MO = node_of("Moreno", "Buenos Aires"), node_of("Moreno", "Salta")
+if all((BA_BOL, SA_BOL, BA_BEL, SA_BEL, BA_SM, SA_SM, BA_MO, SA_MO)):
+    # una afín por manzana: Google y OSM no coinciden del todo en el largo de las cuadras
+    PZ = affine_lsq([((203, 284), BA_BOL), ((459, 296), SA_BOL), ((190, 512), BA_BEL), ((447, 525), SA_BEL)])
+    SB = affine_lsq([((214, 48), BA_SM), ((470, 60), SA_SM), ((203, 284), BA_BOL), ((459, 296), SA_BOL)])
+    CB = affine_lsq([((190, 512), BA_BEL), ((447, 525), SA_BEL), ((165, 767), BA_MO), ((432, 779), SA_MO)])
+    Pz = lambda pts: [PZ(u, v) for u, v in pts]
+    Sb = lambda pts: [SB(u, v) for u, v in pts]
+    Cb = lambda pts: [CB(u, v) for u, v in pts]
+
+    # La plaza: todo pasto (tiles de sendero: pasto sin arboleda al azar), la arboleda es la medida en la captura
+    plaza = Pz([(207, 288), (455, 300), (443, 521), (194, 509)])
+    lot(plaza, FOOTPATH, [GRASS, FOOTPATH, YARD, BLOCK, OSMB, DIRT])
+    drop_paths_in(_P(plaza).buffer(2))
+    lot(Pz([(328, 392), (381, 401), (380, 427), (340, 425), (324, 411)]), DIRT, [FOOTPATH, GRASS])  # claro de tierra del centro
+    for pl in [
+        [(224, 310), (436, 318), (430, 500), (216, 492), (224, 310)],          # sendero perimetral
+        [(224, 310), (248, 333), (272, 358)],                                  # diagonal noroeste
+        [(313, 311), (300, 336), (283, 352), (272, 358)],                      # bajada desde Bolívar
+        [(272, 358), (266, 375), (264, 393), (268, 412), (278, 430)],          # lado oeste del rombo (curvo)
+        [(265, 398), (285, 392), (305, 387), (325, 384), (348, 389), (366, 397), (383, 402)],  # arco del centro
+        [(366, 316), (378, 340), (383, 362), (384, 385), (383, 402), (381, 425), (378, 445), (375, 460)],  # lado este
+        [(434, 316), (415, 335), (401, 356), (384, 383)],                      # diagonal noreste
+        [(383, 402), (434, 404)],                                              # salida a Salta
+        [(375, 460), (402, 480), (430, 500)],                                  # diagonal sudeste
+        [(375, 460), (364, 480), (355, 498)],                                  # bajada a Belgrano (este)
+        [(278, 430), (255, 458), (218, 490)],                                  # diagonal sudoeste
+        [(278, 430), (292, 455), (305, 480), (312, 496)],                      # bajada a Belgrano (oeste)
+        [(278, 430), (298, 416), (326, 410)],                                  # entrada al claro
+    ]:
+        add_path(Pz(pl))
+    print("Plaza de la Cruz: árboles", add_trees(REFT["img37"]["plaza"], PZ))
+
+    # Manzana norte (San Martín / Bolívar): Escuela N° 3 del Centenario y Colegio Pte. Hipólito Yrigoyen.
+    # En OSM el edificio está como un rectángulo lleno (way 1371164060): se rehace con sus dos patios.
+    blkS = Sb([(219, 57), (462, 68), (452, 288), (209, 277)])
+    lot(blkS, DIRT)
+    drop_osm.add(1371164060)
+    sc = osm_way_pts(1371164060)
+    if sc:
+        ll = lambda la, lo: proj(la, lo)
+        SF = bilin([ll(-27.46961, -58.84047), ll(-27.46969, -58.83951), ll(-27.47019, -58.84054), ll(-27.47027, -58.83956)])
+        fill(RQ(SF, 0, 0, 1, 1), PEATONAL, GROUND)   # los patios: piso de baldosa
+        ESC = "Escuela N° 3 del Centenario"
+        for u0, v0, u1, v1, nm, fl in [(0, 0, 1, 0.17, ESC, 2), (0, 0.86, 1, 1, ESC, 2), (0, 0.17, 0.13, 0.86, ESC, 2),
+                                       (0.92, 0.17, 1, 0.86, ESC, 2), (0.31, 0.70, 0.64, 0.86, ESC, 2),
+                                       (0.31, 0.17, 0.64, 0.57, ESC + " (centro)", 2)]:
+            building(RQ(SF, u0, v0, u1, v1), nm, fl, style=1)
+    print("escuela de la Plaza de la Cruz: árboles", add_trees(REFT["img37"]["escuela"], SB))
+
+    # Manzana sur (Belgrano / Moreno): la iglesia (forma de OSM) con su atrio arbolado, el pasto del costado
+    lot(Cb([(262, 522), (338, 526), (337, 601), (263, 598)]), PEATONAL, [YARD, BLOCK, GRASS, FOOTPATH, DIRT, PARKING])  # atrio
+    lot(Cb([(316, 600), (338, 601), (336, 690), (316, 688)]), PEATONAL, [YARD, BLOCK, GRASS, FOOTPATH, DIRT, PARKING])  # galería este
+    lot(Cb([(338, 526), (437, 530), (431, 772), (334, 768)]), FOOTPATH)   # el terreno de pasto
+    lot(Cb([(178, 520), (262, 522), (262, 648), (174, 645)]), FOOTPATH)   # jardín del oeste
+    print("iglesia de la Cruz: árboles", add_trees(REFT["img37"]["iglesia"], CB))
+    poi["cruz_de_los_milagros"] = near_tile(*CB(300, 521))
+    poi["plaza_de_la_cruz"] = near_tile(*PZ(330, 300))
+
+    # Club San Martín (vereda de enfrente, sobre Salta): el techo grande del gimnasio, la pileta cubierta y el polvo de ladrillo
+    building(Cb([(500, 621), (597, 627), (594, 730), (497, 724)]), "Club San Martín", 3, style=3, pal=1)
+    building(Cb([(459, 617), (500, 621), (499, 671), (458, 668)]), "Club San Martín (natatorio)", 2, style=3, pal=1)
+    lot(Cb([(518, 733), (588, 737), (586, 789), (516, 785)]), DIRT)
+    print("Plaza de la Cruz y alrededores: listos")
+else:
+    print("no encontré las esquinas de la Plaza de la Cruz")
+
+# ---- Parque Mitre: captura img36 (Caa Guazú, Regatas, puerto deportivo, faro, juegos, Higuera de la India) ---------
+_hk = [nodes[n] for n in ways[922911041]["nodes"][:-1]] if 922911041 in ways else None   # cancha de hockey (Panorámica)
+if _hk:
+    PM = affine_lsq([((240, 30), proj(-27.4587776, -58.8309607)),      # Faro del Parque Mitre (OSM 8567400947)
+                     ((145, 385), proj(-27.4595988, -58.8312089)),      # Ancla (OSM 10883771929)
+                     ((385, 400), proj(sum(a for a, _ in _hk) / 4, sum(b for _, b in _hk) / 4))])
+    Pm = lambda pts: [PM(u, v) for u, v in pts]
+    # Gomero / Higuera de la India (OSM 4957365853, natural=tree): copa de ~40 m y ~22 m de alto. Debajo, tierra pisada.
+    GX, GY = proj(-27.4599374, -58.829865)
+    GR = 20.0 / TILE_M
+    work_props.setdefault("bigtrees", []).append([round(GX, 2), round(GY, 2), 20, 22])
+    _gi = Image.new("L", (W, H), 0); ImageDraw.Draw(_gi).ellipse([GX - GR - 1, GY - GR - 1, GX + GR + 1, GY + GR + 1], fill=1)
+    _gm = (np.array(_gi) > 0) & np.isin(grid, [GRASS, FOOTPATH, YARD])
+    grid[_gm] = DIRT
+    excl_polys.append(_PtE(GX, GY).buffer(GR + 1)); excl_osm.append(_PtE(GX, GY).buffer(GR + 1))
+    poi["higuera"] = near_tile(GX, GY + GR * 0.55, (DIRT,))
+    # el resto del parque que se ve en la captura: pasto con la arboleda medida (sin árboles al azar)
+    foot = _P(Pm([(0, 0), (1143, 0), (1143, 796), (0, 796)]))
+    _fi = Image.new("L", (W, H), 0); ImageDraw.Draw(_fi).polygon(list(foot.exterior.coords), fill=1)
+    grid[(np.array(_fi) > 0) & (grid == GRASS)] = FOOTPATH
+    far = lambda x, y: math.hypot(x - GX, y - GY) < GR + 2.5
+    print("Parque Mitre: árboles", add_trees(REFT["img36"], PM, skip=far))
+    # patio de juegos: arenero redondo con juegos (los dibuja el render 3D)
+    for u, v, rm in [(770, 678, 11)]:
+        x, y = PM(u, v)
+        rr = rm / TILE_M
+        _pi = Image.new("L", (W, H), 0); ImageDraw.Draw(_pi).ellipse([x - rr, y - rr, x + rr, y + rr], fill=1)
+        grid[(np.array(_pi) > 0) & np.isin(grid, [GRASS, FOOTPATH, YARD])] = SAND
+        work_props.setdefault("playgrounds", []).append([round(x, 2), round(y, 2), rm])
+    # puerto deportivo: muelles de madera y lanchas amarradas
+    for pl in [[(110, 465), (350, 700)], [(130, 660), (240, 740), (350, 700)]]:
+        pts = Pm(pl)
+        _di = Image.new("L", (W, H), 0); ImageDraw.Draw(_di).line(pts, fill=1, width=2)
+        grid[(np.array(_di) > 0) & np.isin(grid, [WATER, GRASS, FOOTPATH, YARD, SAND])] = PEATONAL
+        work_props.setdefault("docks", []).append([round(c, 2) for xy in pts for c in xy])
+    ang = math.atan2(*(lambda a, b: (b[1] - a[1], b[0] - a[0]))(PM(0, 0), PM(110, -25)))
+    for u, v, lm in [(140, 505, 7), (157, 522, 7), (172, 542, 6), (187, 566, 6), (205, 590, 6), (217, 610, 6), (245, 625, 6),
+                     (265, 638, 5), (192, 676, 6), (210, 692, 6), (228, 708, 6), (250, 720, 5)]:
+        x, y = PM(u, v)
+        if 0 <= x < W and 0 <= y < H and grid[int(y), int(x)] == WATER:
+            work_props.setdefault("boats", []).append([round(x, 2), round(y, 2), round(ang, 3), lm])
+    # Faro del Parque Mitre (1887): torrecita blanca con remate rojo
+    fx, fy = proj(-27.4587776, -58.8309607); fr = 2.2 / TILE_M
+    building([(fx - fr, fy - fr), (fx + fr, fy - fr), (fx + fr, fy + fr), (fx - fr, fy + fr)], "Faro del Parque Mitre", 4,
+             over=[YARD, BLOCK, OSMB, GRASS, FOOTPATH, DIRT, SAND])
+    # Biblioteca El Palomar
+    bx, by = PM(1047, 436)
+    building([PM(1033, 422), PM(1061, 422), PM(1061, 452), PM(1033, 452)], "Biblioteca El Palomar", 1)
+    print("Parque Mitre: listo (higuera en %.1f, %.1f)" % (GX, GY))
+
+# ---- Altarcito del Gauchito Gil: Av. Maipú y Necochea ------------------------------------------------------------
+_gg = node_of("Avenida Maipú", "Necochea")
+if _gg:
+    best = None
+    for sx, sy in [(1, 1), (-1, 1), (1, -1), (-1, -1)]:   # la esquina con más lugar libre (vereda ancha o baldío)
+        x, y = _gg[0] + sx * 7.5, _gg[1] + sy * 7.5
+        if 0 <= x < W and 0 <= y < H and grid[int(y), int(x)] in (YARD, GRASS, SIDEWALK, DIRT):
+            best = (x, y, sx, sy); break
+    if best:
+        x, y, sx, sy = best; a, b = 1.3 / TILE_M, 1.0 / TILE_M
+        building([(x - a, y - b), (x + a, y - b), (x + a, y + b), (x - a, y + b)], "Altar del Gauchito Gil", 1,
+                 over=[YARD, GRASS, SIDEWALK, DIRT])
+        for k, (ox, oy) in enumerate([(-2.2, -1.6), (2.2, -1.6), (-2.6, 1.4), (2.6, 1.4), (0, -2.4)]):
+            work_props.setdefault("flags", []).append([round(x + ox / TILE_M * 1.0, 2), round(y + oy / TILE_M, 2), 4.5 if k < 4 else 6, "#d8201c"])
+        poi["gauchito_gil"] = near_tile(x - sx * 2.5, y - sy * 2.5)
+        print("Gauchito Gil: listo en", round(x, 1), round(y, 1))
+
+# ---- Cerveza Patagonia: jardín cervecero en la Costanera y Thomas Edison (lado del río) ----------------------------
+px_, py_ = proj(-27.46934, -58.85410)
+if grid[int(py_), int(px_)] not in (ROAD, WATER):
+    # el galpón de la cervecería (eje paralelo a la Costanera) y la terraza/jardín hacia el río
+    _cn = [proj(*nodes[n]) for w in ways.values() if w.get("tags", {}).get("name") == "Avenida Costanera General San Martín"
+           for n in w["nodes"] if n in nodes and math.hypot(proj(*nodes[n])[0] - px_, proj(*nodes[n])[1] - py_) < 40]
+    ux, uy = 0.6, -0.8
+    if len(_cn) >= 2:
+        _cn.sort(key=lambda p: p[1]); dx, dy = _cn[-1][0] - _cn[0][0], _cn[-1][1] - _cn[0][1]; L = math.hypot(dx, dy) or 1; ux, uy = dx / L, dy / L
+    vx, vy = -uy, ux   # perpendicular
+    if (vx * -1 + vy * 0) < 0:
+        vx, vy = -vx, -vy   # que apunte hacia el río (oeste)
+    T_ = lambda a, b: (px_ + ux * a / TILE_M + vx * b / TILE_M, py_ + uy * a / TILE_M + vy * b / TILE_M)
+    garden = [T_(-22, 4), T_(22, 4), T_(22, 34), T_(-22, 34)]
+    lot(garden, PEATONAL, [YARD, GRASS, FOOTPATH, DIRT, BLOCK, OSMB, SAND])
+    building([T_(-14, 18), T_(14, 18), T_(14, 30), T_(-14, 30)], "Cerveza Patagonia", 1, over=[PEATONAL, YARD, GRASS, FOOTPATH, DIRT])
+    for a in (-16, -8, 0, 8, 16):
+        x, y = T_(a, 10); work_props["trees"].append([round(x, 2), round(y, 2), 3, 0])
+    for a in (-18, -12, -6, 0, 6, 12, 18):
+        x, y = T_(a, 13); work_props.setdefault("parasols", []).append([round(x, 2), round(y, 2), 1.6])
+    poi["patagonia"] = near_tile(*T_(0, 2), (SIDEWALK, PEATONAL))
+    print("Cerveza Patagonia: lista")
+
+# ---- Puntos de misión (tile caminable de vereda frente a la puerta) ------------------------------------------------
+def facade_poi(pts, toward=None):
+    """Vereda frente a la fachada: el extremo del eje largo que da a la calle (como las torres del render 3D),
+    o el lado que mira hacia `toward` (x, y)."""
+    g = _P(pts).buffer(0); c = g.centroid
+    mr = g.minimum_rotated_rectangle; q = list(mr.exterior.coords)[:4]
+    e1 = (q[1][0] - q[0][0], q[1][1] - q[0][1]); e2 = (q[2][0] - q[1][0], q[2][1] - q[1][1])
+    ax_ = e1 if math.hypot(*e1) >= math.hypot(*e2) else e2; la = math.hypot(*ax_) / 2; ax_ = (ax_[0] / la / 2, ax_[1] / la / 2)
+    cands = []
+    for s in (1, -1):
+        x, y = c.x + ax_[0] * s * (la + 3), c.y + ax_[1] * s * (la + 3)
+        t = near_tile(x, y)
+        if t:
+            cands.append((math.hypot(t[0] - x, t[1] - y) if toward is None else math.hypot(x - toward[0], y - toward[1]), t))
+    if toward is not None:
+        x, y = c.x, c.y; dx, dy = toward[0] - x, toward[1] - y; L = math.hypot(dx, dy) or 1
+        for k in range(200):
+            x += dx / L * 0.5; y += dy / L * 0.5
+            if not g.buffer(0.5).contains(_PtE(x, y)):
+                t = near_tile(x, y)
+                if t: return t
+    return min(cands)[1] if cands else None
+
+
+def osm_named(name):
+    return next((pp for pp, nm in zip(osm_polys, osm_names) if nm == name), None)
+
+
+_p25 = next((way_pts(w) for w in ways.values() if w.get("tags", {}).get("name") == "Plaza 25 de Mayo" and is_closed(w)), None)
+_c25 = (sum(p[0] for p in _p25) / len(_p25), sum(p[1] for p in _p25) / len(_p25)) if _p25 else None
+for key, name, toward in [("casa_gobierno", "Casa de Gobierno de la Provincia de Corrientes", _c25),
+                          ("la_merced", "Iglesia Nuestra Señora de la Merced", None),
+                          ("catedral", "Catedral Ntra. Sra. del Rosario", None),
+                          ("san_francisco", "Iglesia San Francisco Solano", None),
+                          ("dpec", "Dirección Provincial de Energía (DPEC)", SA_SM)]:
+    pp = osm_named(name)
+    if pp:
+        poi[key] = facade_poi(pp, toward)
+if HUR_CLUB:   # Huracán: la entrada de la tribuna oeste, sobre la calle
+    poi["huracan"] = near_tile(*hm(0, -HLB - 26))
+if all(CORN.values()):   # el trabajo: la puerta del edificio de losa sobre Bolívar
+    poi["trabajo"] = near_tile(*bl(0.53, 0.02))
+# parada de colectivos útil: en la Plaza 25 de Mayo (centro, frente a la Casa de Gobierno, pasan varias líneas)
+_bus = node_of("25 de Mayo", "Salta") or node_of("Avenida 3 de Abril", "La Rioja")
+if _bus:
+    poi["parada_colectivo"] = near_tile(_bus[0] + 6, _bus[1] + 4, (SIDEWALK,))
+poi = {k: v for k, v in poi.items() if v}
+print("POI:", poi)
+
 clipped = 0
 bcount, bnames = 0, []
 from shapely.geometry import Point as _Pt2
 for kind, polys in ((0, ms_polys), (1, osm_polys), (2, [b[2] for b in work_buildings])):
   for oi, orig in enumerate(polys):
+    if kind == 1 and osm_ids[oi] in drop_osm:
+        continue  # edificio de OSM rehecho a mano (p. ej. la escuela de la Plaza de la Cruz)
     if (kind == 0 and excl_polys) or (kind == 1 and not osm_names[oi] and excl_osm):
         cxp = sum(p[0] for p in orig) / len(orig); cyp = sum(p[1] for p in orig) / len(orig)
         if any(ex.contains(_Pt2(cxp, cyp)) for ex in (excl_polys if kind == 0 else excl_osm)):
@@ -928,7 +1230,7 @@ data = {
     "nodes": [c for xy in node_xy for c in xy],
     "edges": [v for e in edges for v in e],
     "names": names, "spawn": [round(spawn[0], 1), round(spawn[1], 1)], "places": places, "paths": paths, "buildings": bflat, "bnames": bnames, "bridges": bridges, "routes": bus_routes,
-    "signals": signals, "addresses": addresses, "props": work_props,
+    "signals": signals, "addresses": addresses, "props": work_props, "poi": poi,
     "attribution": "Mapa © OpenStreetMap contributors (ODbL)",
 }
 OUT.write_text("// Generado por tools/build_map.py — Datos © OpenStreetMap contributors (ODbL)\n"

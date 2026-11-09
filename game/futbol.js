@@ -201,9 +201,15 @@ function createMatch(opts, done) {
   const BRIBED = opts.arbitroComprado != null ? !!opts.arbitroComprado : /offside|orsai/i.test(String(opts.arbitro || ''));
   const PENALES = opts.penales > 0 ? opts.penales | 0 : (/penal/i.test(String(opts.empate || '')) ? (parseInt(String(opts.empate).match(/(\d+)/)?.[1], 10) || 3) : 0);
   const RELATO = opts.relato || {};
+  // frase del relato (string o lista de variantes) o el texto por defecto
+  const rel = (k, def) => { const v = RELATO[k]; return Array.isArray(v) ? (v.length ? pick(v) : def) : (v || def); };
+  const SHORT0 = String(EJ.corto || NAME0).toUpperCase();
+  const SHORT1 = (s => s.length > 16 ? s.replace(/^(LOS|LAS|EL|LA) /, '').replace(/ F\.?C\.?$/, '') : s)(String(ER.corto || RIVAL).toUpperCase());
   const DEMO = !!opts.demo;
   const minutos = opts.minutos > 0 ? +opts.minutos : 3;
   const HALF = minutos * 60 / 2;                // segundos reales por tiempo
+  // los rivales "de planta" se cansan pasado el minuto 4 de 6 (dos tercios del partido)
+  const tiredNow = () => TIRED && (M.half >= 3 || (M.half === 2 && M.clock > HALF / 3));
 
   // ---------------------------------------------------------- estado
   const M = {
@@ -249,6 +255,7 @@ function createMatch(opts, done) {
   const inBox = (t, x, y) => { const gx = ownGoalX(t); return Math.abs(x - gx) < AD && Math.abs(y - CY) < AW / 2; };
   const speedOf = p => {
     let s = p.team === 1 ? 84 + DIF * 3.2 : 100;
+    if (p.team === 1 && tiredNow()) s *= 0.8;
     if (p.role === 'GK') s *= 0.9;
     if (isHuman(p)) s *= 1.05;
     return s;
@@ -316,7 +323,8 @@ function createMatch(opts, done) {
     take(tk, true);
     M.kicker = tk;
     if (!DEMO) M.ctrl = t === 0 ? tk : nearestTo(team(0).filter(p => p.role !== 'GK'), ball.x, ball.y);
-    label(t === 0 ? 'Saca HURACÁN' : `Saca ${RIVAL.toUpperCase()}`, 1.4);
+    if (!M.relatoInicio && RELATO.inicio) { M.relatoInicio = true; label(rel('inicio', ''), 3.2); }
+    else label(t === 0 ? `Saca ${SHORT0}` : `Saca ${SHORT1}`, 1.4);
   }
   function nearestTo(list, x, y) { let b = null, bd = 1e9; for (const p of list) { const d = hyp(p.x - x, p.y - y); if (d < bd) { bd = d; b = p; } } return b; }
 
@@ -480,7 +488,7 @@ function createMatch(opts, done) {
         const tx = o.x + o.vx * 0.18 + Math.sign(gx - o.x) * 3, ty = o.y + o.vy * 0.18;
         steer(p, tx, ty, p === R.press ? 0.92 + d * 0.012 : 0.85);
         const dd = hyp(o.x - p.x, o.y - p.y);
-        const rate = t === 1 ? 0.2 + d * 0.11 : 0.45;
+        const rate = t === 1 ? (0.2 + d * 0.11) * (DIRTY ? 1.7 : 1) * (tiredNow() ? 0.6 : 1) : 0.45;
         if (dd < 22 && dd > 8 && Math.random() < rate * dt) startSlide(p, Math.atan2(ball.y - p.y, ball.x - p.x));
       } else if (p === R.cover) {
         const gx = ownGoalX(t);
@@ -823,7 +831,7 @@ function createMatch(opts, done) {
           p.slideHit = true;
           const hadBall = ball.owner === q;
           knockDown(q, 0.9); AU.thud();
-          if (!p.touched && (hadBall || Math.random() < 0.5) && M.phase === 'play') {
+          if (!p.touched && (hadBall || Math.random() < (DIRTY && p.team === 1 ? 0.85 : 0.5)) && M.phase === 'play') {
             const pen = inBox(p.team, q.x, q.y) && q.role !== 'GK';
             ballDead(pen ? 'penal' : 'falta', q.team, q.x, q.y, q);
             AU.whistle(0.45);
@@ -860,7 +868,73 @@ function createMatch(opts, done) {
     for (const p of players) { p.charge = 0; p.charging = false; }
     if (type !== 'falta' && type !== 'penal') AU.whistle(0.22);
     const names = { lateral: 'Lateral', corner: 'Córner', arco: 'Saque de arco', falta: '¡Falta!', penal: '¡PENAL!' };
-    if (type === 'penal') big('¡PENAL!', 1.6, '#ff5050', 16); else label(names[type], 1.3);
+    if (type === 'penal') big('¡PENAL!', 1.6, '#ff5050', 16);
+    else if (type === 'falta' && t === 0 && RELATO.falta) label(rel('falta', names.falta), 1.8);
+    else label(names[type], 1.3);
+  }
+  // árbitro comprado (solo el primer tiempo): a veces cobra offside cuando cruzás la mitad con la pelota
+  function bribedRef(dt) {
+    M.offCD = (M.offCD || 4) - dt;
+    const o = ball.owner, inRival = !!(o && o.team === 0 && toU(0, o.x) > 0.52);
+    if (inRival && !M.wasInRival && M.offCD <= 0 && Math.random() < 0.5) {
+      M.offCD = 14; M.wasInRival = true;
+      release(o); AU.whistle(0.55);
+      ballDead('falta', 1, clamp(o.x, 6, FW - 6), clamp(o.y, 6, FH - 6));
+      big('¡OFFSIDE!', 1.8, '#ff8040', 16); label('¿Offside en fútbol 5? El árbitro mira el celular', 2.6);
+      return;
+    }
+    M.wasInRival = inRival;
+  }
+
+  // ---------------------------------------------------------- penales (definición por empate)
+  function startShootout() {
+    AU.whistle(0.3); AU.whistle(0.6, 0.4);
+    M.shootout = { goals: [0, 0], kicks: [0, 0], log: [[], []], turn: M.kickoff0, n: PENALES, res: null, t: 0 };
+    M.phase = 'pensIntro'; M.pt = 0; M.recCount = 0;
+    big('¡PENALES!', 3, '#ffe040', 16); label(`${PENALES} por lado. Si siguen iguales, muerte súbita`, 3);
+  }
+  function nextPenalty() {
+    const S = M.shootout, t = S.turn;
+    const shooters = team(t).filter(p => p.role !== 'GK');
+    const tk = shooters[(shooters.length - 1 - S.kicks[t] % shooters.length)];   // empieza el 9
+    for (const p of players) { p.st = 'ok'; p.stT = 0; p.vx = p.vy = p.dvx = p.dvy = 0; p.charge = 0; p.charging = false; p.kickCD = 0; p.saveCD = 0; p.diveDone = false; p.penalGuess = 0; }
+    M.pending = { type: 'penal', team: t, x: 0, y: 0, fouled: tk };
+    setupRestart();     // pateador en el punto, arquero en la línea, los demás afuera del área
+    if (t === 1 && !DEMO) M.ctrl = gkOf(0);
+    S.res = null; S.t = 0;
+    label(t === 0 ? `Patea ${tk.name || SHORT0}` : `Patea ${SHORT1}`, 1.6);
+  }
+  function penaltyPlay(dt) {
+    const S = M.shootout; S.t += dt;
+    for (const p of players) { if (p.role === 'GK') { if (p.st === 'ok' || p.st === 'kick') gkAI(p, dt); } else { p.dvx = p.dvy = 0; } }
+    updatePlayers(dt); updateBall(dt);
+    const gk = gkOf(1 - S.turn);
+    if (!ball.owner && gk.saveCD <= 0 && hyp(gk.x - ball.x, gk.y - ball.y) < (gk.st === 'dive' ? 13 : 8.5) && ball.z < 20) gkTouch(gk);
+    if (ball.x < -1 || ball.x > FW + 1) { penaltyResult(Math.abs(ball.y - CY) < GW / 2 - 0.5 && ball.z < GH, false); return; }
+    if (ball.owner === gk) { penaltyResult(false, true); return; }
+    if (ball.y < -3 || ball.y > FH + 3 || (S.t > 0.7 && hyp(ball.vx, ball.vy) < 25) || S.t > 3.5) penaltyResult(false, false);
+  }
+  function penaltyResult(scored, saved) {
+    const S = M.shootout, t = S.turn;
+    if (S.res !== null) return;
+    S.res = scored; S.kicks[t]++; S.log[t].push(scored); if (scored) S.goals[t]++;
+    if (ball.owner) release(ball.owner);
+    const gkName = (gkOf(0).name || 'el arquero').toUpperCase();
+    if (scored) {
+      ball.inNet = true; shake(3);
+      if (t === 0) { AU.roar(0.5, 3, 1300); AU.voice(1.6); big(rel('golJugador', TX.gol), 2.2, '#ffe040', 16); confetti(LOOKS[0].fans); }
+      else { AU.roar(0.15, 2, 420); big('Adentro. Penal de planta permanente.', 2, '#f0f0f0', 8); }
+    } else {
+      AU.roar(t === 0 ? 0.12 : 0.45, 2, t === 0 ? 420 : 1100);
+      if (t === 0) big(saved ? '¡LO ATAJÓ!' : '¡AFUERA!', 2, '#ff6060', 16);
+      else { big(saved ? `¡ATAJÓ ${gkName}!` : '¡LA TIRÓ A LA TRIBUNA!', 2.2, '#60ff80', 16); confetti(LOOKS[0].fans); }
+    }
+    M.phase = 'pensWait'; M.pt = 0;
+  }
+  function shootoutDecided() {
+    const S = M.shootout, [a, b] = S.goals, [ka, kb] = S.kicks, n = S.n;
+    if (ka < n || kb < n) return a + (n - ka) < b || b + (n - kb) < a;   // ya no lo alcanza
+    return ka === kb && a !== b;                                       // fin de la serie o muerte súbita
   }
   function setupRestart() {
     const { type, team: t, fouled } = M.pending;
@@ -944,8 +1018,9 @@ function createMatch(opts, done) {
       }
       if (IN.kick) { if (tk.charging || IN.kickP) { tk.charging = true; tk.charge = Math.min(1, tk.charge + dt / 0.7); } }
       else if (tk.charging) { const pw = 0.25 + 0.75 * tk.charge; tk.charging = false; tk.charge = 0; executeRestart('kick', pw); return; }
-      if (IN.passP) { executeRestart('pass', 0.5); return; }
-      if (M.pt > 7) { executeRestart('pass', 0.5); return; }
+      const pk = R.type === 'penal' ? 'kick' : 'pass';   // un penal no se pasa
+      if (IN.passP) { executeRestart(pk, 0.55); return; }
+      if (M.pt > 7) { executeRestart(pk, 0.6); return; }
     } else if (M.pt > R.aiT) {
       if (R.type === 'penal') {
         const gx = oppGoalX(tk.team), ty = CY + pick([-1, 1]) * rand(GW * 0.2, GW * 0.45) + rand(-1, 1) * (1 - difOf(tk.team) / 12) * 14;
@@ -969,8 +1044,8 @@ function createMatch(opts, done) {
     for (const p of players) { p.charge = 0; p.charging = false; }
     const local = t === 0;
     AU.whistle(0.2, 0.05); AU.roar(local ? 0.55 : 0.12, local ? 5 : 2, local ? 1300 : 420);
-    if (local) { AU.voice(2.6); big(TX.gol, 3.2, '#ffe040', 24); confetti(['#e0202e', '#2040b0', '#f4f4f4', '#ffe040']); }
-    else { big(TX.golRival, 3, '#f0f0f0', 8); confetti(LOOKS[1].fans); }
+    if (local) { AU.voice(2.6); const g = rel('golJugador', TX.gol); big(g, 3.2, '#ffe040', g.length > 16 ? 16 : 24); confetti([...LOOKS[0].fans, '#ffe040']); }
+    else { big(rel('golRival', TX.golRival), 3, '#f0f0f0', 8); confetti(LOOKS[1].fans); }
     if (ball.last && ball.last.team !== t) label('¡En contra!', 2);
     M.crowdMode = local ? 'L' : 'R'; M.crowdT = 5; shake(5); M.excite = 1;
   }
@@ -1012,6 +1087,7 @@ function createMatch(opts, done) {
   function tickClock(dt) {
     M.clock += dt;
     if (M.half < 3 && !M.addedShown && M.clock >= HALF) { M.addedShown = true; label(`Tiempo agregado: +${M.added[M.half - 1]}'`, 2.2); }
+    if (!M.tiredShown && tiredNow()) { M.tiredShown = true; label(`${SHORT1}: se les terminó el horario`, 2.8); }
     if (M.clock >= halfLimit() && !shotInFlight() && M.phase !== 'goal') endHalf();
   }
   function endHalf() {
@@ -1019,6 +1095,8 @@ function createMatch(opts, done) {
     if (M.half === 1) {
       AU.whistle(0.3); AU.whistle(0.6, 0.4);
       M.phase = 'half'; M.pt = 0; big(TX.entretiempo, 3.5, '#ffe040', 16);
+    } else if (M.half === 2 && PENALES > 0 && M.score[0] === M.score[1]) {
+      startShootout();
     } else if (M.half === 2 && opts.necesitaGanar && M.score[0] === M.score[1]) {
       AU.whistle(0.3); AU.whistle(0.6, 0.4);
       M.phase = 'golden'; M.pt = 0; big('¡GOL DE ORO!', 3, '#ffe040', 16); label(TX.golDeOro, 3);
@@ -1026,11 +1104,14 @@ function createMatch(opts, done) {
   }
   function finish() {
     AU.whistle(0.3); AU.whistle(0.3, 0.4); AU.whistle(0.9, 0.8);
-    const [a, b] = M.score;
-    const ok = opts.necesitaGanar ? a > b : a >= b;
+    const [a, b] = M.score, S = M.shootout;
+    const win = S ? S.goals[0] > S.goals[1] : a > b, lose = S ? S.goals[0] < S.goals[1] : a < b;
+    const ok = S ? win : opts.necesitaGanar ? a > b : a >= b;
     M.result = { ok, golesJugador: a, golesRival: b };
-    M.endMsg = a > b ? TX.ganaste : a < b ? TX.perdiste : TX.empate;
-    if (a > b) { AU.roar(0.45, 4, 1100); confetti(['#e0202e', '#2040b0', '#f4f4f4']); M.crowdMode = 'L'; M.crowdT = 6; }
+    if (S) { M.result.penalesJugador = S.goals[0]; M.result.penalesRival = S.goals[1]; }
+    M.endMsg = (win ? TX.ganaste : lose ? TX.perdiste : TX.empate) + (S ? ` (penales ${S.goals[0]}-${S.goals[1]})` : '');
+    M.winner = win ? 0 : lose ? 1 : -1;
+    if (win) { AU.roar(0.45, 4, 1100); confetti(LOOKS[0].fans); M.crowdMode = 'L'; M.crowdT = 6; }
     M.phase = 'full'; M.pt = 0;
   }
 
@@ -1074,16 +1155,29 @@ function createMatch(opts, done) {
         break;
       }
       case 'play':
+        if (M.shootout) { penaltyPlay(dt); break; }
         tickClock(dt);
         if (M.phase !== 'play') break;
         assignRoles(); autoSwitch(dt);
         for (const p of players) { if (isHuman(p)) humanControl(p, dt); else aiPlayer(p, dt); }
         updatePlayers(dt); updateBall(dt); interactions(dt); slideFouls();
         if (M.phase === 'play') checkBall();
+        if (M.phase === 'play' && BRIBED && M.half === 1 && !DEMO) bribedRef(dt);
         record();
         break;
+      case 'pensIntro':
+        celebrateEnd(dt); updatePlayers(dt); updateBall(dt);
+        if (M.pt > 3 || (M.pt > 1 && (IN.okP || IN.kickP))) { for (const p of players) p.st = 'ok'; nextPenalty(); }
+        break;
+      case 'pensWait':
+        updatePlayers(dt); updateBall(dt);
+        if (M.pt > 2.2 || (M.pt > 0.9 && (IN.okP || IN.kickP))) {
+          if (shootoutDecided()) finish();
+          else { M.shootout.turn = 1 - M.shootout.turn; nextPenalty(); }
+        }
+        break;
       case 'dead': {
-        tickClock(dt);
+        if (!M.shootout) tickClock(dt);
         if (M.phase !== 'dead') break;
         const P = M.pending;
         for (const p of players) {
@@ -1096,7 +1190,7 @@ function createMatch(opts, done) {
         break;
       }
       case 'restart':
-        tickClock(dt);
+        if (!M.shootout) tickClock(dt);
         if (M.phase !== 'restart') break;
         restartUpdate(dt); updatePlayers(dt);
         if (M.phase === 'restart') updateBall(dt);
@@ -1145,7 +1239,7 @@ function createMatch(opts, done) {
     clearHits();
   }
   function celebrateEnd() {
-    const win = M.score[0] > M.score[1] ? 0 : M.score[1] > M.score[0] ? 1 : -1;
+    const win = M.winner != null ? M.winner : M.score[0] > M.score[1] ? 0 : M.score[1] > M.score[0] ? 1 : -1;
     for (const p of players) {
       if (p.st !== 'ok' && p.st !== 'celebrate') continue;
       if (p.team === win) { p.st = 'celebrate'; p.dvx = p.dvy = 0; }
@@ -1747,9 +1841,18 @@ Chipa.futbol = {
     busy = new Promise(resolve => {
       const go = () => {
         try { if (Chipa.openModal) Chipa.openModal(Chipa.futbol); } catch (e) { console.error(e); }
-        const m = createMatch(opts, r => { busy = null; resolve(r); });
-        Chipa.futbol._dbg = m.dbg;
-        m.start();
+        let m = null;
+        try {
+          m = createMatch(opts, r => { busy = null; resolve(r); });
+          Chipa.futbol._dbg = m.dbg;
+          m.start();
+        } catch (e) {
+          // si el partido no arranca, no dejamos el mundo en pausa ni la promesa colgada
+          console.error('[futbol]', e);
+          try { if (m && m.dbg) m.dbg.close(); } catch (e2) { /* nada */ }
+          try { if (Chipa.closeModal) Chipa.closeModal(); } catch (e2) { /* nada */ }
+          busy = null; resolve({ ok: false, golesJugador: 0, golesRival: 0, error: String(e && e.message || e) });
+        }
       };
       // esperamos la tipografía pixelada (si está en la página) para dibujar los carteles
       const f = document.fonts && document.fonts.load ? document.fonts.load(`8px ${FONT}`) : Promise.resolve();

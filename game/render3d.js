@@ -1046,7 +1046,7 @@ window.createRender3D = function (G) {
     // zona visible a nivel del suelo (más un margen: los edificios altos se "inclinan" hacia adentro)
     const k = camH / Math.max(1, camH - baseZ), gw = view.w * k * (devW / devH) / (iw / ih), gh = view.h * k;
     const gx0 = cx - gw / 2, gy0 = cy - gh / 2;
-    for (const c of G.chunks.values()) if (c.mesh) c.mesh.visible = false;
+    for (const c of G.chunks.values()) { if (c.mesh) c.mesh.visible = false; if (c.veg) c.veg.visible = false; }
     const c0x = Math.floor((gx0 - 32) / CPX), c1x = Math.floor((gx0 + gw + 32) / CPX), c0y = Math.floor((gy0 - 32) / CPX), c1y = Math.floor((gy0 + gh + 32) / CPX);
     for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) {
       if (!G.inMap(x, y)) continue;
@@ -1057,9 +1057,11 @@ window.createRender3D = function (G) {
         c.mesh.position.set(x * CPX + CPX / 2, -(y * CPX + CPX / 2), 0); c.mesh.scale.set(CPX, CPX, 1);
         c.mesh.receiveShadow = true;
         c.mesh.matrixAutoUpdate = false; c.mesh.updateMatrix(); scene.add(c.mesh);
+        if (!c.veg && (c.veg = buildVeg(c.trees))) scene.add(c.veg);
       }
       if (c.dirty) { c.tex.needsUpdate = true; c.dirty = false; }
-      c.mesh.visible = true;
+      c.mesh.visible = true; c.seen = frame;
+      if (c.veg) c.veg.visible = true;
     }
     G.prefetch(gx0, gy0, gw, gh);
     for (const b of blocks.values()) b.group.visible = false;
@@ -1145,8 +1147,361 @@ window.createRender3D = function (G) {
     else { t.minFilter = T.LinearFilter; t.generateMipmaps = false; }
     return t;
   }
-  function updateWorld() { /* agua, vegetación y marcadores: más abajo */ }
+  // ------------------------------------------------------------ vegetación en volumen, con viento
+  // Copas low-poly facetadas (cada cara con su tono, como hojas), mecidas por ráfagas que cruzan la ciudad.
+  // Encima del jugador las copas se calan con un tramado para que no lo tapen.
+  const U_TIME = { value: 0 }, U_PLY = { value: new T.Vector3() };
+  const makeVegMat = (fadeR, fadeZ) => { const m = new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide }); m.onBeforeCompile = sh => {
+    sh.uniforms.uWT = U_TIME; sh.uniforms.uPly = U_PLY;
+    sh.vertexShader = 'attribute float aWind;\nuniform float uWT;\nvarying vec3 vVegW;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        { vec2 wp = position.xy;
+          float gust = 0.5 + 0.5 * sin(uWT * 0.55 - dot(wp, vec2(0.0035, 0.0026)));
+          float s = sin(uWT * 1.7 + wp.x * 0.043 + wp.y * 0.029) * 0.65 + sin(uWT * 3.3 + wp.y * 0.081 - wp.x * 0.05) * 0.35;
+          transformed.xy += vec2(0.8, -0.6) * aWind * (0.35 + gust) * (s + 0.7); }`)
+      .replace('#include <project_vertex>', '#include <project_vertex>\n vVegW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform vec3 uPly;\nvarying vec3 vVegW;\n' + sh.fragmentShader.replace('void main() {', `void main() {
+      { float dp = length(vVegW.xy - uPly.xy);
+        if (vVegW.z > uPly.z + ${fadeZ.toFixed(1)} && dp < ${fadeR.toFixed(1)}) {
+          float k = 1.0 - smoothstep(${(fadeR * 0.45).toFixed(1)}, ${fadeR.toFixed(1)}, dp);
+          if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < k * 0.85) discard; } }`);
+  }; m.customProgramCacheKey = () => 'veg' + fadeR + '_' + fadeZ; return m; };
+  const vegMat = makeVegMat(30, 7), bigVegMat = makeVegMat(80, 34);
+  const VG = () => ({ pos: [], col: [], w: [] });
+  let WF = () => 0; // peso del viento según la altura (lo fija cada planta)
+  function vtx(g, x, y, z, c, w) { g.pos.push(x, -y, z); g.col.push(c[0], c[1], c[2]); g.w.push(w === undefined ? WF(z) : w); }
+  function vtri(g, a, b, c, col) { vtx(g, a[0], a[1], a[2], col, a[3]); vtx(g, b[0], b[1], b[2], col, b[3]); vtx(g, c[0], c[1], c[2], col, c[3]); }
+  function vquad(g, a, b, c, d, col) { vtri(g, a, b, c, col); vtri(g, a, c, d, col); }
+  const icoArr = d => { const g = new T.IcosahedronGeometry(1, d), a = Array.from((g.index ? g.toNonIndexed() : g).attributes.position.array); g.dispose(); return a; };
+  const ICO0 = icoArr(0), ICO1 = icoArr(1);
+  function blob(g, cx, cy, cz, rx, rz, col, rnd, ico) { // copa: icosaedro deformado, más oscuro abajo
+    ico = ico || ICO0; const seed = Math.floor(rnd() * 1e5);
+    const J = (a, b, c) => 0.82 + 0.36 * G.hash(Math.round(a * 50) + seed, Math.round(b * 50) * 3 + Math.round(c * 50) * 7, 77);
+    for (let i = 0; i < ico.length; i += 9) {
+      const nz = (ico[i + 2] + ico[i + 5] + ico[i + 8]) / 3, k = (0.86 + rnd() * 0.24) * (0.74 + 0.3 * nz);
+      const c = [col[0] * k, col[1] * k, col[2] * k];
+      for (let j = 0; j < 9; j += 3) { const s = J(ico[i + j], ico[i + j + 1], ico[i + j + 2]); vtx(g, cx + ico[i + j] * rx * s, cy + ico[i + j + 1] * rx * s, cz + ico[i + j + 2] * rz * s, c); }
+    }
+  }
+  function vleg(g, A, B, w, col) { // viga de sección cuadrada entre dos puntos 3D
+    const dx = B[0] - A[0], dy = B[1] - A[1], dz = B[2] - A[2], l = Math.hypot(dx, dy, dz) || 1;
+    let px = -dy, py = dx, pz = 0, pl = Math.hypot(px, py); if (pl < 1e-3) { px = 1; py = 0; pl = 1; }
+    px /= pl; py /= pl;
+    const qx = (dy * pz - dz * py) / l, qy = (dz * px - dx * pz) / l, qz = (dx * py - dy * px) / l, h = w / 2;
+    const O = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [px * a * h + qx * b * h, py * a * h + qy * b * h, pz * a * h + qz * b * h]);
+    const sh = [1, 0.8, 0.66, 0.9];
+    for (let i = 0; i < 4; i++) {
+      const o = O[i], p = O[(i + 1) % 4];
+      vquad(g, [A[0] + o[0], A[1] + o[1], A[2] + o[2]], [A[0] + p[0], A[1] + p[1], A[2] + p[2]], [B[0] + p[0], B[1] + p[1], B[2] + p[2]], [B[0] + o[0], B[1] + o[1], B[2] + o[2]], mul(col, sh[i]));
+    }
+  }
+  const LEAF = ['#2f6a2a', '#3a7a2e', '#467f30', '#2a5e2c', '#52862f', '#3c6e34', '#5a8a38'].map(rgb);
+  const BLOOM = [['#d0609a', '#e07aac', '#c85090'], ['#d0609a', '#e07aac', '#c85090'], ['#8a6ad0', '#9a7ae0', '#7a5cc0'], ['#e8c030', '#f0d040', '#d8b028']].map(p => p.map(rgb));
+  const BARK = ['#6a5440', '#5e4a38', '#76604a'].map(rgb), PALMT = rgb('#8e7e64'), FROND = ['#3f7a2c', '#4a8632', '#36702a'].map(rgb);
+  const HPM = TS / (G.MD.tileMeters || 2.25); // px por metro en horizontal
+  function palm(g, x, y, h, rnd) {
+    const Ht = 24 + rnd() * 9, lx = (rnd() - 0.5) * 4, ly = (rnd() - 0.5) * 4;
+    WF = z => 0.9 * (z / Ht) ** 2;
+    for (let k = 0; k < 5; k++) vleg(g, [x + lx * k / 5, y + ly * k / 5, Ht * k / 5], [x + lx * (k + 1) / 5, y + ly * (k + 1) / 5, Ht * (k + 1) / 5 + 0.4], 2.1 - k * 0.12, mul(PALMT, k % 2 ? 0.9 : 1.02));
+    const tx = x + lx, ty = y + ly, fc = FROND[Math.floor(rnd() * 3)];
+    for (let i = 0; i < 10; i++) {
+      const a = h * 6.28 + i * 6.283 / 10 + (rnd() - 0.5) * 0.35, ca = Math.cos(a), sa = Math.sin(a), L = 11 + rnd() * 5, dead = i === 3 && rnd() < 0.5;
+      const D = [0, 0.3, 0.65, 1], Z = [0, 3 + rnd() * 2, 2, dead ? -12 : -4 - rnd() * 3], Wd = [0.5, 2.6, 2.1, 0.3];
+      const col = dead ? rgb('#9a8656') : mul(fc, 0.92 + rnd() * 0.16);
+      for (let j = 0; j < 3; j++) {
+        const P = k => [tx + ca * D[k] * L, ty + sa * D[k] * L, Ht + Z[k]], wa = 0.6 + D[j] * 2.6, wb = 0.6 + D[j + 1] * 2.6;
+        const A = P(j), B = P(j + 1), fold = 0.7;
+        vquad(g, [A[0] - sa * Wd[j], A[1] + ca * Wd[j], A[2] - fold, wa], [B[0] - sa * Wd[j + 1], B[1] + ca * Wd[j + 1], B[2] - fold, wb], [B[0], B[1], B[2], wb], [A[0], A[1], A[2], wa], mul(col, 0.86));
+        vquad(g, [A[0], A[1], A[2], wa], [B[0], B[1], B[2], wb], [B[0] + sa * Wd[j + 1], B[1] - ca * Wd[j + 1], B[2] - fold, wb], [A[0] + sa * Wd[j], A[1] - ca * Wd[j], A[2] - fold, wa], col);
+      }
+    }
+    WF = () => 0.5; blob(g, tx, ty, Ht - 0.5, 1.6, 1.4, rgb('#7a5a2a'), rnd); // racimo de cocos
+  }
+  function tree(g, x, y, r, kind, h) {
+    const rnd = lcg(1 + Math.floor(h * 2e6));
+    if (kind === 2) return palm(g, x, y, h, rnd);
+    const R = r * 1.55 + 1.5, Ht = 8 + R * 0.45 + rnd() * 4, zc = Ht + R * 0.42, top = zc + R * 0.65;
+    WF = z => 1.5 * Math.max(0, (z - Ht * 0.5) / (top - Ht * 0.5)) ** 1.6;
+    vleg(g, [x, y, 0], [x + (rnd() - 0.5) * 2, y + (rnd() - 0.5) * 2, Ht + 2], 1.8, BARK[Math.floor(rnd() * 3)]);
+    // lapachos rosados sobre todo, algún jacarandá y algún lapacho amarillo; la mitad de los "lapachos" ya sin flor
+    if (kind === 1 && G.hash(Math.round(x), Math.round(y), 91) < 0.45) kind = 0;
+    const pal = kind === 1 ? BLOOM[h < 0.62 ? 0 : h < 0.86 ? 2 : 3] : LEAF, col = pal[Math.floor(rnd() * pal.length)];
+    blob(g, x, y, zc, R * 0.9, R * 0.6, col, rnd);
+    const nb = 3 + (R > 10 ? 2 : 1);
+    for (let i = 0; i < nb; i++) {
+      const a = i / nb * 6.283 + rnd() * 0.8, d = R * (0.35 + rnd() * 0.25);
+      const c2 = kind === 1 && rnd() < 0.25 ? LEAF[Math.floor(rnd() * LEAF.length)] : mul(col, 0.9 + rnd() * 0.2);
+      blob(g, x + Math.cos(a) * d, y + Math.sin(a) * d, zc - R * 0.12 + rnd() * R * 0.3, R * (0.5 + rnd() * 0.18), R * (0.36 + rnd() * 0.1), c2, rnd);
+    }
+  }
+  // La higuera / gomero de la India del Parque Mitre: un tronco hecho de cientos de raíces aéreas soldadas,
+  // ramas maestras horizontales con raíces-columna que bajan al suelo y una copa en paraguas, oscura y brillante.
+  function gomero(g, x, y, R, H) {
+    const rnd = lcg(4242), bark = ['#8a7a68', '#7a6a58', '#9a8a74', '#6e604f', '#a09080'].map(rgb), zT = H * 0.4;
+    WF = z => 0.5 * Math.max(0, (z - H * 0.45) / (H * 0.55)) ** 2;
+    for (let i = 0; i < 26; i++) { // núcleo: raíces gruesas fundidas
+      const a = i / 26 * 6.283 + rnd() * 0.2, rb = R * (0.06 + rnd() * 0.05), at = a + 0.5 + (rnd() - 0.5) * 0.4;
+      vleg(g, [x + Math.cos(a) * rb, y + Math.sin(a) * rb, 0], [x + Math.cos(at) * rb * 0.5, y + Math.sin(at) * rb * 0.5, zT * (0.95 + rnd() * 0.2)], 4 + rnd() * 3, mul(bark[i % 5], 0.9));
+    }
+    for (let i = 0; i < 170; i++) { // cortina de raíces aéreas alrededor, más finas hacia afuera
+      const a = rnd() * 6.283, f = Math.sqrt(rnd()), rb = R * (0.08 + 0.16 * f), at = a + (rnd() - 0.5) * 0.9, rt = rb * 0.35 + R * 0.02;
+      vleg(g, [x + Math.cos(a) * rb, y + Math.sin(a) * rb, 0], [x + Math.cos(at) * rt, y + Math.sin(at) * rt, zT * (0.75 + rnd() * 0.4)], (3.2 - 2 * f) * (0.7 + rnd() * 0.5), bark[i % 5]);
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * 6.283 + (rnd() - 0.5) * 0.4, L = R * (0.55 + rnd() * 0.35), z1 = H * (0.5 + rnd() * 0.12), a2 = a + (rnd() - 0.5) * 0.3;
+      const pm = [x + Math.cos(a) * L * 0.5, y + Math.sin(a) * L * 0.5, z1], p1 = [x + Math.cos(a2) * L, y + Math.sin(a2) * L, z1 - H * 0.06];
+      vleg(g, [x + Math.cos(a) * R * 0.08, y + Math.sin(a) * R * 0.08, zT * 0.85], pm, 5, bark[0]);
+      vleg(g, pm, p1, 3.2, bark[1]);
+      for (let k = 0; k < 5; k++) { // raíces columna
+        const f = 0.3 + rnd() * 0.68, qx = x + Math.cos(f > 0.5 ? a2 : a) * L * f, qy = y + Math.sin(f > 0.5 ? a2 : a) * L * f, zz = z1 - (f > 0.5 ? H * 0.04 : 0) - 1;
+        vleg(g, [qx + (rnd() - 0.5) * 3, qy + (rnd() - 0.5) * 3, 0], [qx, qy, zz], 0.7 + rnd() * 1.8, bark[(k + 2) % 5]);
+      }
+      for (let k = 0; k < 4; k++) { // raicillas colgando, todavía sin llegar al suelo
+        const f = 0.4 + rnd() * 0.6, qx = x + Math.cos(a2) * L * f + (rnd() - 0.5) * 6, qy = y + Math.sin(a2) * L * f + (rnd() - 0.5) * 6;
+        vleg(g, [qx, qy, z1 * (0.25 + rnd() * 0.4)], [qx, qy, z1], 0.5, bark[4]);
+      }
+    }
+    // copa en racimos: masas grandes y, encima, matas chicas de hojas (verde oscuro brillante del gomero)
+    const leaf = ['#22482a', '#2a562c', '#326232', '#284a24', '#3a6c34', '#2d5428', '#41783a'].map(rgb);
+    for (let i = 0; i < 70; i++) {
+      const rr = R * 0.9 * Math.sqrt(rnd()), a = rnd() * 6.283, f = rr / R, br = R * (0.13 + rnd() * 0.07);
+      blob(g, x + Math.cos(a) * rr, y + Math.sin(a) * rr, H * (0.64 + 0.26 * (1 - f * f)) + (rnd() - 0.5) * H * 0.06, br, br * 0.5, mul(leaf[i % 7], 0.9), rnd, ICO1);
+    }
+    for (let i = 0; i < 230; i++) {
+      const rr = R * Math.sqrt(rnd()), a = rnd() * 6.283, f = rr / R, br = R * (0.045 + rnd() * 0.05);
+      blob(g, x + Math.cos(a) * rr, y + Math.sin(a) * rr, H * (0.7 + 0.27 * (1 - f * f)) + (rnd() - 0.3) * H * 0.08, br, br * 0.7, mul(leaf[(i * 3) % 7], 0.95 + rnd() * 0.25), rnd);
+    }
+  }
+  function vegMesh(g, mat) {
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(g.pos, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(g.col, 3));
+    geo.setAttribute('aWind', new T.Float32BufferAttribute(g.w, 1));
+    geo.computeVertexNormals(); geo.computeBoundingSphere();
+    const m = new T.Mesh(geo, mat || vegMat); m.matrixAutoUpdate = false; m.updateMatrix(); m.castShadow = true; m.receiveShadow = true;
+    return m;
+  }
+  const BIG = [];
+  {
+    const MD2 = G.MD, [S0, W0, N0] = MD2.bbox, MX0 = Math.cos((S0 + N0) / 2 * Math.PI / 180) * 111320, TM = MD2.tileMeters;
+    for (const [xt, yt, rm, hm] of (G.PROPS.bigtrees || [])) BIG.push([(xt + 0.5) * TS, (yt + 0.5) * TS, rm, hm]);
+    if (!BIG.length) BIG.push([((-58.82938 - W0) * MX0 / TM + 0.5) * TS, ((N0 + 27.45939) * 110574 / TM + 0.5) * TS, 20, 22]); // provisorio
+    const g = VG();
+    for (const [x, y, rm, hm] of BIG) gomero(g, x, y, rm * HPM, hm * MPX);
+    scene.add(vegMesh(g, bigVegMat));
+  }
+  function buildVeg(trees) {
+    if (!trees || !trees.length) return null;
+    const g = VG();
+    for (const [x, y, r, kind, h] of trees) {
+      if (BIG.some(([bx, by, rm]) => (x - bx) ** 2 + (y - by) ** 2 < (rm * HPM * 1.05) ** 2)) continue; // bajo la higuera no crece nada
+      tree(g, x, y, r, kind, h);
+    }
+    return g.pos.length ? vegMesh(g) : null;
+  }
+
+  // ------------------------------------------------------------ agua del Paraná
+  // Plano único sobre todo el mapa: una máscara con la distancia a la costa (en tiles) dice dónde hay agua,
+  // qué tan honda se ve y dónde rompe la espuma; olas animadas, cielo reflejado (fresnel), destellos del sol
+  // y la sombra del puente leída del mapa de sombras.
+  const water = (() => {
+    const W = G.MD.w, H = G.MD.h, n = W * H, BIGD = 255;
+    const din = new Uint8Array(n), dout = new Uint8Array(n);
+    for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
+      const t = G.tileAt(x, y), wet = t === 4 || t === TT.BRIDGEW;
+      din[i] = wet ? BIGD : 0; dout[i] = wet ? 0 : BIGD;
+    }
+    const chamfer = d => { // distancia en tercios de tile (3 recto, 4 diagonal), dos pasadas
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y * W + x; let v = d[i]; if (!v) continue;
+        if (x > 0) v = Math.min(v, d[i - 1] + 3);
+        if (y > 0) { v = Math.min(v, d[i - W] + 3); if (x > 0) v = Math.min(v, d[i - W - 1] + 4); if (x < W - 1) v = Math.min(v, d[i - W + 1] + 4); }
+        d[i] = v;
+      }
+      for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+        const i = y * W + x; let v = d[i]; if (!v) continue;
+        if (x < W - 1) v = Math.min(v, d[i + 1] + 3);
+        if (y < H - 1) { v = Math.min(v, d[i + W] + 3); if (x < W - 1) v = Math.min(v, d[i + W + 1] + 4); if (x > 0) v = Math.min(v, d[i + W - 1] + 4); }
+        d[i] = v;
+      }
+    };
+    chamfer(din); chamfer(dout);
+    const data = new Uint8Array(n);
+    for (let i = 0; i < n; i++) data[i] = Math.max(0, Math.min(255, Math.round(128 + (din[i] - dout[i]) / 3 * 16)));
+    const mask = new T.DataTexture(data, W, H, GL2 ? T.RedFormat : T.LuminanceFormat, T.UnsignedByteType);
+    mask.unpackAlignment = 1; mask.magFilter = T.LinearFilter; mask.minFilter = T.LinearFilter; mask.generateMipmaps = false; mask.needsUpdate = true;
+    const mat = new T.ShaderMaterial({
+      uniforms: { ...shadowUniforms(), tMask: { value: mask }, uMapN: { value: new T.Vector2(W, H) }, uTS: { value: TS },
+        uSunCol: { value: LIGHT.sun }, uDeep: { value: new T.Color(0.13, 0.25, 0.3) }, uShallow: { value: new T.Color(0.36, 0.38, 0.26) },
+        uSky: { value: new T.Color(0.52, 0.66, 0.9) }, uHor: { value: new T.Color(1.0, 0.84, 0.66) } },
+      vertexShader: 'varying vec3 vWp; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWp = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: `varying vec3 vWp; ${GLSL_COMMON}
+        uniform sampler2D tMask; uniform vec2 uMapN; uniform float uTS; uniform vec3 uSunCol, uDeep, uShallow, uSky, uHor;
+        float hgt(vec2 p) {
+          float t = uTime;
+          return sin(dot(p, vec2(0.021, 0.034)) + t * 1.1) * 0.45 + sin(dot(p, vec2(-0.043, 0.017)) + t * 1.7) * 0.3
+               + vnoise(p * 0.055 + vec2(t * 0.32, -t * 0.21)) * 1.3 + vnoise(p * 0.16 - vec2(t * 0.55, t * 0.38)) * 0.5
+               + vnoise(p * 0.42 + vec2(t * 0.9, 0.0)) * 0.16;
+        }
+        float softVis(vec3 wp) {
+          if (uHasShadow < 0.5) return 1.0;
+          vec4 sc = uShadowMatrix * vec4(wp, 1.0); vec3 c = sc.xyz / sc.w;
+          if (c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z > 1.0) return 1.0;
+          float s = 0.0, o = 1.0 / 2048.0;
+          for (int i = 0; i < 4; i++) { vec2 d = vec2(float(i - (i / 2) * 2) - 0.5, float(i / 2) - 0.5) * 1.5 * o;
+            s += step(c.z - 0.002, unpackRGBAToDepth(texture2D(uShadowMap, c.xy + d))); }
+          return s * 0.25;
+        }
+        void main() {
+          vec2 tile = vec2(vWp.x, -vWp.y) / uTS;
+          float sd = (texture2D(tMask, tile / uMapN).r * 255.0 - 128.0) / 16.0 - 0.5; // tiles hasta la costa
+          if (sd < 0.0) discard;
+          vec2 p = vWp.xy;
+          float h0 = hgt(p), hx = hgt(p + vec2(1.2, 0.0)), hy = hgt(p + vec2(0.0, 1.2));
+          float calm = 0.55 + 0.45 * smoothstep(0.0, 3.0, sd);
+          vec3 N = normalize(vec3((h0 - hx) * 0.75 * calm, (h0 - hy) * 0.75 * calm, 1.0));
+          vec3 V = normalize(cameraPosition - vWp);
+          float vis = softVis(vWp);
+          float ndv = max(dot(N, V), 0.0), F = 0.12 + 0.88 * pow(1.0 - ndv, 4.0);
+          vec3 Rr = reflect(-V, N);
+          vec3 sky = mix(uHor, uSky, smoothstep(0.55, 1.0, Rr.z)) * (0.75 + 0.25 * vis);
+          float shallow = exp(-sd / 2.2);
+          vec3 body = mix(uDeep, uShallow, shallow) * (0.62 + 0.38 * vis * max(dot(N, uSunDir), 0.0) / max(uSunDir.z, 0.3));
+          body *= 0.92 + 0.16 * vnoise(p * 0.012 + uTime * 0.01);
+          vec3 col = mix(body, sky, F * 0.55);
+          // destellos dorados del sol (con la luz "levantada" para que se vean desde arriba)
+          vec3 Lf = normalize(uSunDir + vec3(0.0, 0.0, 1.6));
+          float rl = max(dot(Rr, Lf), 0.0), sp = pow(rl, 140.0);
+          float gl = smoothstep(0.9, 0.99, vnoise(p * 0.3 + vec2(uTime * 0.9, -uTime * 0.7))) * smoothstep(0.93, 0.99, rl);
+          col += uSunCol * vec3(1.0, 0.86, 0.6) * vis * (sp * 0.75 + gl * 0.8);
+          // espuma en la costa: borde fijo más líneas que llegan
+          float fn = vnoise(p * 0.11 + vec2(uTime * 0.25, uTime * 0.1));
+          float edge = 1.0 - smoothstep(0.0, 0.3 + fn * 0.35, sd);
+          float lines = smoothstep(0.82, 1.0, fract(sd * 0.75 + uTime * 0.18 + fn * 0.6)) * (1.0 - smoothstep(0.4, 2.6, sd));
+          float foam = clamp(edge + lines * 0.55, 0.0, 1.0) * (0.65 + 0.35 * fn);
+          col = mix(col, vec3(0.96, 0.94, 0.88) * (0.62 + 0.38 * vis), foam);
+          gl_FragColor = vec4(col, 1.0);
+        }`,
+    });
+    const m = new T.Mesh(new T.PlaneGeometry(W * TS, H * TS), mat);
+    m.position.set(W * TS / 2, -H * TS / 2, 0.45); m.receiveShadow = false; m.frustumCulled = false;
+    m.matrixAutoUpdate = false; m.updateMatrix(); scene.add(m);
+    return { mesh: m, mat };
+  })();
+  SHADOW_USERS.push(water.mat);
+
+  // ------------------------------------------------------------ marcadores de misión (window.Chipa.markers)
+  // Columna de luz translúcida, anillo que late en el piso y un rombo que flota y gira: se ven de lejos.
+  const beamGeo = new T.CylinderGeometry(1, 1, 1, 28, 1, true); beamGeo.rotateX(Math.PI / 2); beamGeo.translate(0, 0, 0.5);
+  const ringGeo = new T.RingGeometry(0.72, 1, 40);
+  const iconGeo = new T.OctahedronGeometry(1, 0); iconGeo.scale(1, 1, 1.5);
+  const beamShader = (frag) => new T.ShaderMaterial({
+    uniforms: { uCol: { value: new T.Color() }, uTime: { value: 0 } }, transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+    vertexShader: 'varying vec2 vUv; varying vec3 vP; void main(){ vUv = uv; vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying vec2 vUv; varying vec3 vP; uniform vec3 uCol; uniform float uTime; void main(){ ' + frag + ' }',
+  });
+  const MKS = [];
+  function markerObj() {
+    const beam = new T.Mesh(beamGeo, beamShader(`float h = vP.z; float a = pow(1.0 - h, 1.6) * (0.55 + 0.45 * sin(h * 40.0 - uTime * 5.0));
+      a *= 0.6 + 0.4 * sin(vUv.x * 6.2832 * 3.0 + uTime * 2.0); gl_FragColor = vec4(uCol * a * 0.9, 1.0);`));
+    const ring = new T.Mesh(ringGeo, beamShader(`float r = length(vP.xy); float p = fract(uTime * 0.6);
+      float a = smoothstep(0.72, 0.8, r) * (1.0 - smoothstep(0.92, 1.0, r)) * 1.4 + (1.0 - smoothstep(0.0, 0.08, abs(r - 0.72 - p * 0.28))) * (1.0 - p);
+      gl_FragColor = vec4(uCol * a, 1.0);`));
+    const glow = new T.Mesh(unitPlane, beamShader(`float r = length(vUv - 0.5) * 2.0; gl_FragColor = vec4(uCol * pow(max(0.0, 1.0 - r), 2.0) * 0.55, 1.0);`));
+    const icon = new T.Mesh(iconGeo, new T.MeshBasicMaterial({ color: 0xffffff }));
+    icon.castShadow = true;
+    for (const o of [beam, ring, glow, icon]) { o.frustumCulled = false; scene.add(o); }
+    beam.renderOrder = 6; ring.renderOrder = 6; glow.renderOrder = 6;
+    return { beam, ring, glow, icon, col: new T.Color() };
+  }
+  function updateMarkers() {
+    const list = (window.Chipa && window.Chipa.markers) || [];
+    let k = 0;
+    for (const mk of list) {
+      if (!mk || !isFinite(mk.x) || !isFinite(mk.y)) continue;
+      const o = MKS[k] || (MKS[k] = markerObj()); k++;
+      o.col.set(mk.color || '#ffd040');
+      const r = Math.max(14, (mk.r || 10) * 1.3), x = mk.x, y = -mk.y, ph = k * 1.7;
+      o.beam.position.set(x, y, 0); o.beam.scale.set(r * 0.55, r * 0.55, 420);
+      o.ring.position.set(x, y, 0.8); o.ring.scale.set(r, r, 1);
+      o.glow.position.set(x, y, 0.7); o.glow.scale.set(r * 3, r * 3, 1);
+      for (const m of [o.beam, o.ring, o.glow]) { m.material.uniforms.uCol.value.copy(o.col).multiplyScalar(m === o.beam ? 1.3 : 0.9); m.material.uniforms.uTime.value = tNow + ph; m.visible = true; }
+      o.icon.position.set(x, y, 30 + Math.sin(tNow * 2.2 + ph) * 4); o.icon.rotation.set(0, 0, tNow * 1.8 + ph); o.icon.scale.setScalar(5.5);
+      o.icon.material.color.copy(o.col).multiplyScalar(1.5); o.icon.visible = true;
+    }
+    for (let i = k; i < MKS.length; i++) { const o = MKS[i]; o.beam.visible = o.ring.visible = o.glow.visible = o.icon.visible = false; }
+  }
+
+  // ------------------------------------------------------------ aire: polvo dorado flotando y bandadas de pájaros
+  // El polvo vive en una caja que acompaña a la cámara (todo en el shader: sin trabajo por cuadro en la CPU).
+  const DUST_N = 420, dustBox = new T.Vector3(1400, 1000, 150);
+  const dust = (() => {
+    const pos = new Float32Array(DUST_N * 3), r = lcg(99);
+    for (let i = 0; i < DUST_N; i++) { pos[3 * i] = r() * dustBox.x; pos[3 * i + 1] = r() * dustBox.y; pos[3 * i + 2] = r(); }
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+    const mat = new T.ShaderMaterial({
+      uniforms: { uTime: U_TIME, uCam: { value: new T.Vector3() }, uBox: { value: dustBox }, uSize: { value: 2 }, uCol: { value: new T.Color(1.0, 0.82, 0.55) } },
+      transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+      vertexShader: `uniform float uTime, uSize; uniform vec3 uCam, uBox; varying float vA;
+        void main() {
+          vec3 p = position; float ph = p.z * 61.0;
+          vec2 drift = vec2(uTime * 6.0 + sin(uTime * 0.3 + ph) * 12.0, -uTime * 4.0 + cos(uTime * 0.23 + ph) * 10.0);
+          vec2 xy = mod(p.xy + drift - uCam.xy + uBox.xy * 0.5, uBox.xy) + uCam.xy - uBox.xy * 0.5;
+          float z = 6.0 + p.z * uBox.z + sin(uTime * 0.5 + ph) * 6.0;
+          vA = (0.35 + 0.65 * pow(0.5 + 0.5 * sin(uTime * 1.3 + ph * 3.0), 3.0));
+          vec2 e = abs(xy - uCam.xy) / (uBox.xy * 0.5); vA *= 1.0 - smoothstep(0.75, 1.0, max(e.x, e.y));
+          gl_Position = projectionMatrix * viewMatrix * vec4(xy, z, 1.0); gl_PointSize = uSize;
+        }`,
+      fragmentShader: `uniform vec3 uCol; varying float vA; void main() { vec2 c = gl_PointCoord - 0.5; float a = 1.0 - smoothstep(0.2, 0.5, length(c)); gl_FragColor = vec4(uCol * a * vA * 0.55, 1.0); }`,
+    });
+    const pts = new T.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 7; scene.add(pts);
+    return mat;
+  })();
+  // pájaros: palomas y gaviotas (blancas cerca del río) que dan vueltas sobre plazas, parque y Costanera; tiran sombra
+  const birds = (() => {
+    const MD2 = G.MD, [S0, W0, N0] = MD2.bbox, MX0 = Math.cos((S0 + N0) / 2 * Math.PI / 180) * 111320, TM = MD2.tileMeters;
+    const ll = (lat, lon) => [((lon - W0) * MX0 / TM + 0.5) * TS, ((N0 - lat) * 110574 / TM + 0.5) * TS];
+    const flocks = [[-27.4637, -58.8378, 9, 0], [-27.45939, -58.82938, 11, 0], [-27.4628, -58.8445, 9, 1], [-27.4690, -58.8530, 8, 1], [-27.4560, -58.8350, 7, 1], [-27.4710, -58.8400, 7, 0]]
+      .map(([la, lo, n, gull], i) => ({ c: ll(la, lo), n, gull, ph: i * 1.9, R: 160 + i * 23, z: 90 + i * 14 }));
+    const NB = flocks.reduce((s, f) => s + f.n, 0), pos = new Float32Array(NB * 6 * 3), col = new Float32Array(NB * 6 * 3);
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('color', new T.BufferAttribute(col, 3));
+    let k = 0; for (const f of flocks) for (let i = 0; i < f.n; i++) for (let v = 0; v < 6; v++) { const c = f.gull ? (v % 3 === 2 ? 0.75 : 0.95) : (v % 3 === 2 ? 0.32 : 0.48); col[k++] = c; col[k++] = c; col[k++] = c * (f.gull ? 1 : 1.08); }
+    const m = new T.Mesh(geo, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide }));
+    m.castShadow = true; m.frustumCulled = false; scene.add(m);
+    return { flocks, pos, geo, rnd: Array.from({ length: NB }, (_, i) => [G.hash(i, 1, 5), G.hash(i, 2, 5), G.hash(i, 3, 5)]) };
+  })();
+  function updateBirds() {
+    const { flocks, pos, rnd } = birds; let b = 0, o = 0;
+    for (const f of flocks) {
+      const ang = tNow * 0.16 * (f.gull ? 0.8 : 1) + f.ph;
+      const cx = f.c[0] + Math.cos(ang * 0.37) * 120, cy = f.c[1] + Math.sin(ang * 0.29) * 90;
+      for (let i = 0; i < f.n; i++, b++) {
+        const [r1, r2, r3] = rnd[b], a = ang + (r1 - 0.5) * 0.5, R = f.R * (0.8 + r2 * 0.4);
+        const x = cx + Math.cos(a) * R + (r3 - 0.5) * 30, y = cy + Math.sin(a) * R * 0.75 + (r1 - 0.5) * 30, z = f.z + (r2 - 0.5) * 30 + Math.sin(tNow + b) * 4;
+        const hx = -Math.sin(a), hy = Math.cos(a) * 0.75, hl = Math.hypot(hx, hy), ux = hx / hl, uy = hy / hl, vx = -uy, vy = ux; // rumbo y ala
+        const flap = Math.sin(tNow * (f.gull ? 6 : 11) + b * 1.7) * (f.gull ? 2.2 : 1.6), span = f.gull ? 5.5 : 4, L = f.gull ? 2.6 : 2;
+        const P = (s, w, dz) => { pos[o++] = x + ux * s + vx * w; pos[o++] = -(y + uy * s + vy * w); pos[o++] = z + dz; };
+        P(L, 0, 0); P(-L * 0.6, 0, 0); P(-L * 0.1, span, flap);   // ala izquierda
+        P(L, 0, 0); P(-L * 0.6, 0, 0); P(-L * 0.1, -span, flap);  // ala derecha
+      }
+    }
+    birds.geo.attributes.position.needsUpdate = true; birds.geo.computeVertexNormals();
+  }
+
+  function updateWorld(cx, cy) {
+    U_TIME.value = tNow;
+    dust.uniforms.uCam.value.set(cx, -cy, 0);
+    updateBirds();
+    const wu = water.mat.uniforms, sm = sun.shadow.map ? sun.shadow.map.texture : null;
+    wu.uShadowMap.value = sm; wu.uHasShadow.value = sm ? 1 : 0; wu.uTime.value = tNow;
+    const p = G.player, o = p.car || p;
+    U_PLY.value.set(o.x, -o.y, (o.z || 0));
+    updateMarkers();
+    // texturas de piso que hace rato no se ven: se liberan de la GPU (el canvas queda en el caché del juego)
+    if (frame % 60 === 0) for (const c of G.chunks.values()) if (c.mesh && frame - (c.seen || 0) > 600) evict(c);
+  }
   function evict(c) {
+    if (c.veg) { scene.remove(c.veg); c.veg.geometry.dispose(); c.veg = null; }
     if (!c.mesh) return;
     scene.remove(c.mesh); c.mesh.material.dispose(); c.tex.dispose(); c.mesh = null; c.tex = null;
   }

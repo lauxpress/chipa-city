@@ -394,6 +394,10 @@
     let ac = null, master = null;
     try { const AC = window.AudioContext || window.webkitAudioContext; ac = new AC(); master = ac.createGain(); master.gain.value = 0.55; master.connect(ac.destination); } catch (e) { ac = null; }
     let noiseBuf = null;
+    const out = pan => {
+      if (!pan || !ac.createStereoPanner) return master;
+      const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(master); return p;
+    };
     const nb = () => {
       if (noiseBuf) return noiseBuf;
       noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate); const d = noiseBuf.getChannelData(0);
@@ -401,19 +405,26 @@
     };
     const A = {
       ctx: ac,
+      // o.pan: -1 (izquierda) .. 1 (derecha)
       tone(freq, dur, o = {}) {
         if (!ac) return; const t = ac.currentTime + (o.delay || 0), osc = ac.createOscillator(), g = ac.createGain();
         osc.type = o.type || 'square'; osc.frequency.setValueAtTime(freq, t);
         if (o.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq * o.slide), t + dur);
         g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.vol || 0.12, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + dur + 0.02);
+        osc.connect(g); g.connect(out(o.pan)); osc.start(t); osc.stop(t + dur + 0.02);
       },
       noise(dur, o = {}) {
         if (!ac) return; const t = ac.currentTime + (o.delay || 0), s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
         s.buffer = nb(); f.type = o.filter || 'lowpass'; f.frequency.setValueAtTime(o.freq || 1200, t); f.Q.value = o.q || 0.7;
         if (o.sweep) f.frequency.exponentialRampToValueAtTime(o.sweep, t + dur);
         g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.vol || 0.2, t + (o.attack || 0.01)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+        s.connect(f); f.connect(g); g.connect(out(o.pan)); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+      },
+      // silbido "fiu-fiuuu" (Pombero, gente): o.pan, o.vol, o.delay
+      whistle(o = {}) {
+        const d = o.delay || 0, v = o.vol || 0.06, p = o.pan;
+        A.tone(1500, 0.16, { type: 'sine', vol: v, slide: 1.35, delay: d, pan: p });
+        A.tone(1350, 0.42, { type: 'sine', vol: v, slide: 1.6, delay: d + 0.22, pan: p });
       },
       // ruido continuo filtrado (ambiente): devuelve {set(vol)}
       loop(o = {}) {
@@ -496,18 +507,17 @@
       setTimeout(() => { if (hud.title) hud.title.style.opacity = 0; }, secs * 1000);
     };
     // diálogo con máquina de escribir; ENTER/ESPACIO avanza
-    let dlg = null;
+    // si ya hay un diálogo abierto, el nuevo espera en la cola (no se pisan ni queda st.busy colgado)
+    let dlg = null; const dlgQueue = [];
+    function openDlg(d) { if (dlg) { dlgQueue.push(d); return; } dlg = d; hud.dialog.style.display = 'block'; renderDialog(); }
     st.say = (who, text, o = {}) => new Promise(res => {
       st.busy++;
-      dlg = { who, text: String(text), shown: 0, res, opts: o, choice: null };
-      hud.dialog.style.display = 'block';
-      renderDialog();
+      openDlg({ who, text: String(text), shown: 0, res, opts: o, choice: null });
     });
     st.talk = async (lines, who) => { for (const l of lines) { if (st.done) return; if (typeof l === 'string') await st.say(who || '', l); else await st.say(l.who || who || '', l.text); } };
     st.choose = (who, text, options) => new Promise(res => {
       st.busy++;
-      dlg = { who, text: String(text), shown: text.length, res, choice: { options, sel: 0 } };
-      hud.dialog.style.display = 'block'; renderDialog();
+      openDlg({ who, text: String(text), shown: String(text).length, res, opts: {}, choice: { options, sel: 0 } });
     });
     function renderDialog() {
       if (!dlg) return;
@@ -535,8 +545,12 @@
       } else if (st.hit('Enter', 'Space')) closeDialog();
     }
     function closeDialog(v) {
-      const d = dlg; dlg = null; st.busy--; hud.dialog.style.display = 'none'; st.sfx.tone(880, 0.04, { vol: 0.04 }); d.res(v);
+      const d = dlg; dlg = null; st.busy--; hud.dialog.style.display = 'none'; st.sfx.tone(880, 0.04, { vol: 0.04 });
+      st.hits.Enter = st.hits.Space = false; // la tecla que cierra no dispara también st.action()
+      d.res(v);
+      if (dlgQueue.length) openDlg(dlgQueue.shift());
     }
+    st.dialogOpen = () => !!dlg;
 
     // ---------- entrada
     const GAMEKEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'Escape', 'Tab']);
@@ -730,6 +744,7 @@
   }
   const API = {
     list: LIST,
+    has(id) { return LIST.some(s => s.id === id); },
     get playing() { return current ? current.def.id : null; },
     preload(id) { return load(id).then(() => true, () => false); },
     play(id, opts) {

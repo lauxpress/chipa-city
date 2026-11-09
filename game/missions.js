@@ -226,6 +226,7 @@ function boot() {
     if (VEH[kind]) return VEH[kind].name;
     return ({ sedan: 'el auto', pickup: 'la camioneta', sport: 'el deportivo', zcar: 'el auto negro', moto: 'la moto' })[kind] || 'el vehículo';
   }
+  const aVeh = kind => vehName(kind).replace(/^el /, 'al ').replace(/^la /, 'a la ').toUpperCase(); // "al remís", "a la camioneta"
   // sprite y tipo físico para cada clase de vehículo de misión
   function vehSpec(kind, o = {}) {
     kind = kindOf(kind);
@@ -442,6 +443,7 @@ function boot() {
     barLabel: ui.bar.querySelector('.m-bar-label'), barIn: ui.bar.querySelector('.m-bar-in'),
     face: ui.dlg.querySelector('.m-face'), name: ui.dlg.querySelector('.m-name'), text: ui.dlg.querySelector('.m-text'), opts: ui.dlg.querySelector('.m-opts'), next: ui.dlg.querySelector('.m-next'),
   };
+  ui.hud.appendChild(ui.bar); // la barra de progreso va dentro del recuadro de objetivo (no se pisa con nada)
   const show = (e, on) => { e.style.display = on ? '' : 'none'; };
   for (const k of ['hud', 'banner', 'prompt', 'bar', 'sub', 'dlg', 'card', 'list', 'done', 'fail', 'confirm']) show(ui[k], false);
   const cache = {};
@@ -521,6 +523,8 @@ function boot() {
     H.opts.innerHTML = dlg.choice.map((o, i) => `<div class="m-opt${i === dlg.sel ? ' on' : ''}">${i === dlg.sel ? '▶' : '&nbsp;'} ${i + 1}. ${esc(o.text)}</div>`).join('');
   }
   function uiBlocking() { return dlg.open || card.open || list.open || confirmBox.open; }
+  let talkingCls = false;
+  function syncBodyClass() { const on = uiBlocking(); if (on !== talkingCls) { talkingCls = on; document.body.classList.toggle('m-talking', on); } }
 
   // ============================================================ MISIONES: DATOS
   const FALLBACK_PLACES = {};
@@ -541,11 +545,18 @@ function boot() {
   function placeGivers() {
     for (const g of givers.values()) { removeProp(g.prop); if (g.marker) removeMarker(g.marker); }
     givers.clear();
-    for (const m of MISSIONS) {
-      const st = statusOf(m);
-      if (st === 'bloqueada') continue;
+    // primero las disponibles: si un personaje da varias misiones en el mismo lugar (Ña Cata en la Plaza 25 de Mayo),
+    // se ve una sola vez y ENTER ofrece la que está disponible; las repeticiones quedan para cuando no hay otra.
+    const order = MISSIONS.map(m => ({ m, st: statusOf(m) })).filter(o => o.st !== 'bloqueada')
+      .sort((a, b) => (a.st === 'disponible' ? 0 : 1) - (b.st === 'disponible' ? 0 : 1) || (b.m.n || 0) - (a.m.n || 0));
+    for (const { m, st } of order) {
       const at = resolveAt(m.giver && m.giver.at, { x: C.player.x + 40, y: C.player.y });
-      const [x, y] = snapWalk(at[0], at[1]);
+      let [x, y] = snapWalk(at[0], at[1]);
+      const taken = [...givers.values()].find(g => d2(g.x, g.y, x, y) < 26 * 26);
+      if (taken) {
+        if (st !== 'disponible') continue;
+        [x, y] = snapWalk(x + 22, y + 10);
+      }
       const color = st === 'completada' ? '#9aa0a8' : '#ff9f3f';
       const prop = addProp(x, y, giverFrames(m.giver && m.giver.look, color), { fps: 4 });
       const g = { m, x, y, prop, marker: null, status: st };
@@ -637,7 +648,7 @@ function boot() {
     if (gpsMarker) { removeMarker(gpsMarker); gpsMarker = null; }
     const run = {
       m, i: -1, t: 0, flags: Object.assign({}, progress.flags, from ? from.flags : null), props: new Set(), markers: new Set(), cars: new Set(), from: from ? from.i : 0,
-      vehicle: null, tick: null, timeLeft: null, hint: '', extra: '', target: null, override: null, bonus: [], looks: {}, guard: 0, retry,
+      vehicle: null, tick: null, timeLeft: null, hint: '', extra: '', target: null, override: null, bonus: [], looks: {}, guard: 0, retry, stats: {},
     };
     if (m.giver && m.giver.look) run.looks[m.giver.name] = m.giver.look;
     active = run;
@@ -658,6 +669,7 @@ function boot() {
         const res = await execStep(st, run, i);
         if (active !== run) return;
         let next = i + 1;
+        if (run.jumpTo != null) { next = run.jumpTo; run.jumpTo = null; i = next; continue; } // depuración
         if (res && res.goto !== undefined && res.goto !== null) {
           const gt = res.goto;
           if (gt === 'fin' || gt === 'end') next = steps.length;
@@ -675,7 +687,7 @@ function boot() {
   }
   function execStep(st, run, i) {
     // estado común del paso
-    run.tick = null; run.hint = st.hint || ''; run.extra = ''; run.target = null; run.forceDone = false;
+    run.tick = null; run.hint = st.hint || ''; run.extra = ''; run.target = null; run.forceDone = false; run.onTimeout = null;
     run.timeLeft = st.time > 0 ? st.time : null; run.stepFail = st.onFail || null; run.step = st;
     hideBar();
     const f = STEPS[st.type];
@@ -759,7 +771,7 @@ function boot() {
     active = null; cleanup(run);
     const base = replay ? Math.round(money(m) * 0.25) : money(m);
     const bonus = run.bonus.reduce((s, b) => s + (b.money || 0), 0);
-    C.player.score += base + bonus;
+    C.player.score = Math.max(0, C.player.score + base + bonus);
     // flags del guion: persisten entre misiones
     Object.assign(progress.flags, run.flags);
     const prevBest = progress.done[m.id] && progress.done[m.id].best;
@@ -768,8 +780,9 @@ function boot() {
     const before = new Set([...givers.keys()]);
     placeGivers();
     const nuevas = [...givers.keys()].filter(id => !before.has(id)).map(id => byId(id).title);
-    ui.done.innerHTML = `<div class="m-big">¡MISIÓN CUMPLIDA!</div><div class="m-money">+$${base + bonus}</div>` +
-      run.bonus.map(b => `<div class="m-bonus">${esc(b.label)}${b.money ? ' +$' + b.money : ''}</div>`).join('') +
+    const sgn = v => (v < 0 ? '-$' : '+$') + Math.abs(v);
+    ui.done.innerHTML = `<div class="m-big">¡MISIÓN CUMPLIDA!</div><div class="m-money">${sgn(base + bonus)}</div>` +
+      run.bonus.map(b => `<div class="m-bonus">${esc(b.label)}${b.money ? ' ' + sgn(b.money) : ''}</div>`).join('') +
       `<div class="m-bonus dim">TIEMPO ${fmtTime(run.t)}</div>` +
       nuevas.map(t => `<div class="m-bonus new">NUEVA MISIÓN: ${esc(t)}</div>`).join('');
     show(ui.done, true); doneT = 6;
@@ -817,7 +830,7 @@ function boot() {
     if (v) {
       if (v.wreck || !C.cars.includes(v)) { failRun(run, `¡Hiciste pelota ${vehName(v.kind)}!`); return null; }
       if (car === v) { if (v.burn > 0) run.override = { hint: '¡SE PRENDE FUEGO! ¡BAJATE!' }; return v; }
-      run.override = { hint: 'Volvé a subirte a ' + vehName(v.kind), target: v };
+      run.override = { hint: 'VOLVÉ A SUBIRTE ' + aVeh(v.kind), target: v };
       return null;
     }
     if (car && !car.wreck) return car;
@@ -866,7 +879,7 @@ function boot() {
     const at = resolveAt(st.at, null) || (() => { const a = C.player.a; return [C.player.x + Math.cos(a) * 40, C.player.y + Math.sin(a) * 40]; })();
     const v = spawnVehicle(run, kind, at[0], at[1], { line: st.line, ramal: st.ramal, color: st.color });
     run.vehicle = v;
-    run.hint = st.hint || 'Subite a ' + vehName(kind);
+    run.hint = st.hint || 'SUBITE ' + aVeh(kind);
     run.target = v;
     const mk = rMarker(run, v.x, v.y, '#30c0e8', vehName(kind), 16);
     return waitTick(run, () => {
@@ -961,7 +974,7 @@ function boot() {
       // colectivo: en orden, frenar en la parada y esperar que suban
       const s = stops[cur];
       run.target = s.dp;
-      run.hint = st.hint ? `${st.hint} — ${s.label}` : `Pará en: ${s.label}`;
+      run.hint = st.hint ? `${st.hint}\n▶ ${s.label}` : `PARÁ EN: ${s.label}`;
       const late = t - s.expected;
       run.extra = `PARADA ${cur + 1}/${stops.length} · ${late > 0 ? '<b class="red">ATRASADO ' + Math.ceil(late) + 's</b>' : 'EN HORARIO'} · DAÑO ${Math.round(dmg)}%`;
       const near = d2(v.x, v.y, s.dp.x, s.dp.y) < RAD * RAD;
@@ -1010,7 +1023,7 @@ function boot() {
       const bonus = Math.round((st.bonus != null ? st.bonus : 300) * (isBasura ? clamp(1.6 - t / Math.max(30, accT * 1.2), 0.2, 1) : avg) * dmgF / 10) * 10;
       const label = isBasura ? `RECOLECCIÓN · DAÑO ${Math.round(damageMax)}%` : `PUNTUALIDAD ${Math.round(avg * 100)}% · DAÑO ${Math.round(damageMax)}%`;
       run.bonus.push({ label, money: bonus });
-      run.flags.ultimoRecorrido = { puntualidad: Math.round(avg * 100), dano: Math.round(damageMax) };
+      run.stats.ultimoRecorrido = { puntualidad: Math.round(avg * 100), dano: Math.round(damageMax) };
       banner(`<small>${esc(label)}</small><br>BONUS $${bonus}`, 2.6, 'small');
     }
   };
@@ -1094,7 +1107,7 @@ function boot() {
           let tip = base * (mood === 'apurado' ? tf * tf : tf) * (mood === 'mareado' ? df * df : df) * (mood === 'charlatán' ? 1.15 : 1);
           tip = Math.max(0, Math.round(tip / 10) * 10);
           run.bonus.push({ label: `PROPINA DE ${name.toUpperCase()}`, money: tip });
-          run.flags.ultimaPropina = tip;
+          run.stats.ultimaPropina = tip;
           const endL = L.end || (tip > base * 0.7 ? '¡Bárbaro! Tomá, quedate con el vuelto.' : tip > 0 ? 'Llegamos… más o menos. Tomá.' : '¡Nunca más me subo con vos! Ni propina te dejo.');
           dialog(lineObjs(endL, name, look, run)).then(() => { phase = 'done'; banner(`<small>PROPINA</small><br>$${tip}`, 2.2, 'small'); });
         }
@@ -1219,7 +1232,11 @@ function boot() {
     const spec = vehSpec(kind, { line: tg.line, ramal: tg.ramal, color: tg.color });
     const e0 = C.nearestDriveEdge(from[0], from[1]);
     if (e0 < 0) return Promise.resolve();
-    const route = to ? routeEdges(e0, G.eb[C.nearestDriveEdge(to[0], to[1])]) : null;
+    // ruta hasta el principio de la calle del destino y después esa calle (así termina a la altura del destino)
+    const deTo = to ? C.nearestDriveEdge(to[0], to[1]) : -1;
+    let route = deTo >= 0 ? (deTo === e0 ? [e0] : routeEdges(e0, G.ea[deTo])) : null;
+    if (route && route[route.length - 1] !== deTo) route.push(deTo);
+    if (!route && deTo >= 0) route = routeEdges(e0, G.eb[deTo]);
     const s0 = proj(e0, from[0], from[1]), [x, y] = C.lanePoint(e0, s0, 1);
     clearSpot(x, y, 40);
     const c = C.makeCar(x, y, Math.atan2(G.edy[e0], G.edx[e0]), { type: spec.type, color: spec.color, spr: spec.spr, mode: 'ai', npc: true });
@@ -1228,6 +1245,13 @@ function boot() {
     Object.assign(c, { mission: true, kind, e: e0, s: s0, lane: 1, spd: 0, maxSpd: st.speed ? m2px(st.speed / 3.6) : goal === 'catch' ? 95 : 72,
       isBus: true, stopIn: 1e9, stopT: 0 });
     if (route) { c.route = route; c.ri = 0; }
+    // en la última calle llega a la altura del destino (no hasta la otra esquina)
+    const sEnd = route && to ? proj(route[route.length - 1], to[0], to[1]) + 12 : Infinity;
+    // seguimiento con tiempo: que el objetivo llegue holgado antes de que se acabe el reloj
+    if (route && goal === 'follow' && st.time > 0 && !st.speed) {
+      let len = 0; for (const e of route) len += G.elen[e];
+      c.maxSpd = clamp(len / (st.time * 0.5), 55, 100);
+    }
     run.cars.add(c);
     const tname = tg.name || vehName(kind);
     const mk = rMarker(run, c.x, c.y, '#ff4060', tname, 12);
@@ -1237,6 +1261,8 @@ function boot() {
     let lostT = 0, physT = 0, t = 0, startHp = c.hp;
     const roamSecs = st.secs || 60;
     run.hint = st.hint || (goal === 'catch' ? `Alcanzá y frená a ${tname} (chocalo)` : `Seguí a ${tname} sin perderlo`);
+    // seguir: si se acaba el reloj y todavía lo tenés a la vista, cumpliste
+    if (goal === 'follow') run.onTimeout = () => { if (lostT > GRACE * 0.5) return false; stopTarget(); banner('<small>NO TE VIO</small><br>¡LO SEGUISTE HASTA EL FINAL!', 2, 'small'); return true; };
     return waitTick(run, dt => {
       t += dt;
       mk.x = c.x; mk.y = c.y; run.target = c;
@@ -1246,7 +1272,7 @@ function boot() {
       }
       if (!C.cars.includes(c)) { if (goal === 'follow') return true; failRun(run, st.onFail || '¡Se te escapó!'); return false; }
       // llegó a destino (o se terminó la ruta)
-      const arrived = c.remove || (route && c.ri >= route.length - 1 && c.s > G.elen[c.e] - 40) || (!route && goal === 'follow' && t > roamSecs);
+      const arrived = c.remove || (route && c.ri >= route.length - 1 && c.s > Math.min(G.elen[c.e] - 40, sEnd)) || (!route && goal === 'follow' && t > roamSecs);
       if (arrived) {
         c.remove = false; stopTarget();
         if (goal === 'follow') { banner('<small>LLEGÓ A DESTINO</small>', 1.8, 'small'); return true; }
@@ -1287,28 +1313,45 @@ function boot() {
   };
 
   // scene / futbol: delegan en los otros módulos
+  // Si el módulo no está, la escena no existe todavía o se rompe al cargar/crear, el paso se da por superado
+  // con el aviso "ESCENA EN CONSTRUCCIÓN" (así se puede jugar la misión entera mientras se terminan las escenas).
+  async function construction(run, label) {
+    await notice(run, 'ESCENA EN CONSTRUCCIÓN · ' + label, 2.6);
+    return { ok: true, skipped: true };
+  }
   async function external(run, st, mod, call, label) {
     const M = C[mod];
-    if (!M || typeof M.play !== 'function' || (mod === 'scenes' && M.has && !M.has(st.id))) {
-      await notice(run, `ESCENA EN CONSTRUCCIÓN\n${label}`, 2.5);
+    const known = mod !== 'scenes' || !M || !Array.isArray(M.list) || M.list.some(s => s && s.id === st.id);
+    if (DEBUG.skipScenes) return construction(run, label + ' (SALTEADA)');
+    if (!M || typeof M.play !== 'function' || !known || (mod === 'scenes' && M.has && !M.has(st.id))) return construction(run, label);
+    releaseKeys(); show(ui.hud, false); show(ui.sub, false);
+    run.inModal = true;
+    let r;
+    try { r = await call(M); } catch (e) { console.error('[misiones]', mod, e); r = { ok: false, data: { error: String(e) } }; }
+    run.inModal = false;
+    if (C.modal) C.closeModal(); // por las dudas, que no quede el mundo en pausa
+    releaseKeys();
+    if (active !== run) return;
+    const err = r && (r.error || (r.data && r.data.error));
+    if (!r || (r.ok === false && err && !(r.data && r.data.quit))) {
+      console.warn('[misiones] escena/minijuego con error, se da por superado:', label, err || r);
+      return construction(run, label);
+    }
+    if (r.ok === false) {
+      const quit = (r.data && r.data.quit) || r.abandono;
+      failRun(run, quit ? 'ABANDONASTE' : st.onFail || r.reason || (st.opts && (st.opts.textoPierde || st.opts.textoPerder)) || 'NO LO LOGRASTE');
       return;
     }
-    releaseKeys(); show(ui.hud, false);
-    let r;
-    try { r = await call(M); } catch (e) { console.error('[misiones]', mod, e); r = { ok: false, error: String(e) }; }
-    if (active !== run) return;
-    if (C.modal) C.closeModal(); // por las dudas, que no quede el mundo en pausa
-    if (!r || r.ok === false) { failRun(run, st.onFail || (r && r.reason) || (st.opts && (st.opts.textoPierde || st.opts.textoPerder)) || 'NO LO LOGRASTE'); return; }
     return r;
   }
   STEPS.scene = async (st, run) => {
-    const r = await external(run, st, 'scenes', M => M.play(st.id, Object.assign({ mission: run.m.id, flags: run.flags }, st.opts || {})), st.id || '');
-    if (r && active === run) { run.flags['escena_' + st.id] = r.score != null ? r.score : true; if (r.data && typeof r.data === 'object' && r.data.flags) Object.assign(run.flags, r.data.flags); }
+    const r = await external(run, st, 'scenes', M => M.play(st.id, Object.assign({ mission: run.m.id, flags: Object.assign({}, run.flags) }, st.opts || {})), ((st.opts && st.opts.titulo) || st.id || '').toUpperCase());
+    if (r && active === run) { run.stats['escena_' + st.id] = r.score != null ? r.score : true; if (r.data && typeof r.data === 'object' && r.data.flags) Object.assign(run.flags, r.data.flags); }
   };
   STEPS.futbol = async (st, run) => {
     const r = await external(run, st, 'futbol', M => M.play(Object.assign({ mission: run.m.id }, st.opts || {})), 'FÚTBOL');
     if (r && active === run) {
-      run.flags.futbol = { gj: r.golesJugador, gr: r.golesRival };
+      run.stats.futbol = { gj: r.golesJugador, gr: r.golesRival };
       if (r.golesJugador != null) banner(`<small>RESULTADO</small><br>${r.golesJugador} a ${r.golesRival}`, 2.4, 'small');
     }
   };
@@ -1327,9 +1370,9 @@ function boot() {
     const k = await choose(st.prompt, opts, st.who, st.who ? lookFor(st.who, st.look, run) : null);
     const o = opts[k] || opts[0];
     if (o.set) Object.assign(run.flags, o.set);
-    if (o.money) { // una opción puede dar o sacar plata
-      C.player.score = Math.max(0, C.player.score + o.money);
-      banner(`<small>${o.money > 0 ? 'COBRASTE' : 'PAGASTE'}</small><br>$${Math.abs(o.money)}`, 2, 'small');
+    if (o.money) { // una opción puede dar o sacar plata: se cobra/paga al cumplir la misión (no se duplica al reintentar)
+      run.bonus.push({ label: o.label || (o.money > 0 ? 'EXTRA: ' : 'GASTO: ') + String(o.text || '').toUpperCase().slice(0, 40), money: o.money });
+      banner(`<small>${o.money > 0 ? 'VAS A COBRAR' : 'VAS A PAGAR'}</small><br>$${Math.abs(o.money)}`, 2.2, 'small');
       C.sfx.blip(o.money > 0 ? 880 : 220, 0.12, 0.1);
     }
     if (o.lines) await dialog(lineObjs(o.lines, st.who, lookFor(st.who, st.look, run), run));
@@ -1377,6 +1420,7 @@ function boot() {
   let promptKey = '';
   C.hooks.update.push(dt => {
     updateProps(dt);
+    syncBodyClass();
     const P = C.player;
     // con un diálogo o un menú abierto, el auto frena solo
     if (uiBlocking() && P.car) { const c = P.car; c.vx *= 0.92; c.vy *= 0.92; }
@@ -1389,7 +1433,13 @@ function boot() {
         run.t += dt;
         if (P.dead) { failRun(run, P.busted ? '¡TE AGARRÓ LA CANA!' : '¡SONASTE!'); }
         else {
-          if (run.timeLeft != null) { run.timeLeft -= dt; if (run.timeLeft <= 0) { run.timeLeft = 0; failRun(run, run.stepFail || '¡SE ACABÓ EL TIEMPO!'); } }
+          if (run.timeLeft != null) {
+            run.timeLeft -= dt;
+            if (run.timeLeft <= 0) {
+              if (run.onTimeout && run.onTimeout()) { run.timeLeft = null; run.forceDone = true; }
+              else { run.timeLeft = 0; failRun(run, run.stepFail || '¡SE ACABÓ EL TIEMPO!'); }
+            }
+          }
           if (active === run && run.tick) run.tick(dt);
         }
       }
@@ -1460,6 +1510,7 @@ function boot() {
   let lastUi = performance.now(), blipN = 0;
   function uiLoop(now) {
     const dt = Math.min(0.1, (now - lastUi) / 1000); lastUi = now;
+    syncBodyClass();
     if (dlg.open) {
       const l = dlg.lines[dlg.i];
       if (dlg.shown < l.text.length) {
@@ -1567,10 +1618,52 @@ function boot() {
     status: id => { const m = byId(id); return m ? statusOf(m) : null; },
     start(id) { const m = byId(id); if (m && !active) startMission(m); return !!m; },
     cancel: cancelRun, retry,
-    skip() { if (active) active.forceDone = true; },               // da por cumplido el paso actual (pruebas)
-    reset() { progress = { done: {}, flags: {} }; saveProgress(); placeGivers(); },
+    skip() { DEBUG.skip(); },                                         // da por cumplido el paso actual (pruebas)
+    debug: null,
+    reset() { if (active) cancelRun(); progress = { done: {}, flags: {} }; saveProgress(); placeGivers(); },
     resolveAt, snapWalk, snapDrive, givers, dialog: (lines, who) => dialog(lineObjs(lines, who, null, active)),
     sprites: { basurero: basureroSprite, remis: remisSprite, dpec: dpecSprite, portrait },
+  };
+  // ---- depuración desde la consola: Chipa.missions.debug.help()
+  const DEBUG = C.missions.debug = {
+    help() {
+      return ['state()            estado de la misión en curso', 'start(id|n, paso)  arranca una misión (desbloqueada o no), opcionalmente desde un paso',
+        'skip()             da por cumplido el paso actual (cierra diálogos; en una elección toma la marcada)', 'step(i)            salta al paso i (base 0)',
+        'pick(k)            en una elección abierta, elige la opción k (base 0)', 'tp()               te lleva al objetivo actual',
+        'complete(id|n)     marca misiones como cumplidas (todas las previas)', 'flag(k, v)         escribe una flag global', 'unlockAll()        desbloquea todas',
+        'fail()             hace fallar la misión en curso'].join('\n');
+    },
+    state() {
+      const r = active; if (!r) return { active: null, failed: failed && { id: failed.m.id, reason: failed.reason, checkpoint: failed.checkpoint }, flags: C.missionFlags };
+      const st = r.m.steps[r.i] || {};
+      return { id: r.m.id, i: r.i, type: st.type, hint: (r.override && r.override.hint) || r.hint, extra: r.extra, timeLeft: r.timeLeft, dialog: dlg.open ? (dlg.choice ? 'choice' : dlg.i + 1 + '/' + dlg.lines.length) : null,
+        target: r.target && isFinite(r.target.x) ? [Math.round(r.target.x), Math.round(r.target.y)] : null, vehicle: r.vehicle ? r.vehicle.kind : null, inCar: !!C.player.car, flags: Object.assign({}, r.flags) };
+    },
+    start(id, step = 0) {
+      const m = typeof id === 'number' ? MISSIONS.find(q => q.n === id) : byId(id); if (!m) return false;
+      if (active) cancelRun(); hideFail(); show(ui.done, false);
+      if (step) startMission(m, false, { i: step, flags: {} }); else startMission(m);
+      return true;
+    },
+    skip() {
+      if (card.open) { closeCard(true); return; }
+      if (dlg.open) { closeDialog(dlg.choice ? dlg.sel : undefined); return; }
+      if (active) active.forceDone = true;
+    },
+    step(i) { if (!active) return false; active.jumpTo = i; this.skip(); return true; },
+    pick(k) { if (dlg.open && dlg.choice) { dlg.sel = k; closeDialog(k); return true; } return false; },
+    tp(dx = 0, dy = 0) {
+      const r = active, t = r && ((r.override && r.override.target) || r.target); if (!t || !isFinite(t.x)) return false;
+      C.teleport(t.x + dx, t.y + dy); const car = C.player.car; if (car) { car.vx = car.vy = 0; }
+      return [Math.round(t.x), Math.round(t.y)];
+    },
+    complete(...ids) {
+      for (const id of ids) { const m = typeof id === 'number' ? MISSIONS.find(q => q.n === id) : byId(id); if (m) progress.done[m.id] = { t: Date.now(), best: 0 }; }
+      saveProgress(); placeGivers(); return Object.keys(progress.done);
+    },
+    unlockAll() { for (const m of MISSIONS) for (const u of m.unlock || []) if (!progress.done[u]) progress.done[u] = { t: Date.now(), best: 0 }; saveProgress(); placeGivers(); },
+    flag(k, v = true) { progress.flags[k] = v; if (active) active.flags[k] = v; saveProgress(); return C.missionFlags; },
+    fail(reason) { if (active) failRun(active, reason || 'FALLO DE PRUEBA'); },
   };
   // flags del guion (las guardadas + las de la misión en curso), por si una escena las quiere leer
   Object.defineProperty(C, 'missionFlags', { configurable: true, get: () => Object.assign({}, progress.flags, active ? active.flags : null) });

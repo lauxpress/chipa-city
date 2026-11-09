@@ -236,10 +236,12 @@ if (GS > 1) {
     return [172 + c + (v < 0.08 ? 14 : 0), 92 + c / 2, 74 + c / 3];
   });
   TEX[T_DIRT] = vars(109, (x, y, r) => { const v = r(); return v < 0.03 ? [182, 174, 160] : v < 0.15 ? [114, 94, 68] : v < 0.24 ? [162, 138, 102] : [140, 116, 84]; });
+  // patio / terreno: pasto más seco con alguna mancha de tierra chica (sin cuadros enteros de tierra: se notaba la grilla)
+  const yardG = grassFn([74, 118, 60], 14);
   TEX[T_YARD] = vars(110, (x, y, r, i) => {
-    const v = r();
-    if (i === 3 && (x * 7 + y * 3) % 23 < 9) return v < 0.3 ? [112, 92, 66] : [128, 106, 76];
-    return v < 0.12 ? [90, 136, 72] : v < 0.22 ? [68, 102, 56] : v < 0.24 ? [128, 106, 76] : [79, 122, 66];
+    const v = yardG(x, y, r, i), dx = x - 7, dy = y - 15;
+    if (i === 3 && dx * dx * 0.5 + dy * dy < 5 + 5 * hash(x, y, 111)) return [v[0] + 30, v[1] + 4, v[2] + 8]; // pisoteado
+    return v;
   });
   for (const t in TEX) TEXD[t] = TEX[t].map(c => c.width === TT ? c.getContext('2d').getImageData(0, 0, TT, TT).data : null);
 }
@@ -527,6 +529,15 @@ let frameNo = 0;
 // ---- Chunks en alta (modo 3D): el piso a GS×, con los bordes de calzada y vereda suaves (no en escalera),
 // cordón cuneta, sendas peatonales, tapas, baches y manchas. Los árboles no se pintan: los levanta el 3D.
 const HD_M = 2, HD_W = CH + 2 * HD_M;
+// árboles gigantes (props.bigtrees: [x, y, radio m, alto m] en tiles); si el mapa todavía no los trae, la higuera del Parque Mitre
+const BIGTREES = (() => {
+  const tm = MD.tileMeters, l = ((MD.props && MD.props.bigtrees) || []).map(([x, y, rm]) => [(x + 0.5) * TS, (y + 0.5) * TS, rm * TS / tm]);
+  if (!l.length) {
+    const [S, Wb, N] = MD.bbox, mx = Math.cos((S + N) / 2 * Math.PI / 180) * 111320;
+    l.push([((-58.82938 - Wb) * mx / tm + 0.5) * TS, ((N + 27.45939) * 110574 / tm + 0.5) * TS, 20 * TS / tm]);
+  }
+  return l;
+})();
 const ROADC = t => t === T_ROAD || t === T_BRIDGE || t === T_PARK;
 const WATERC = t => t === T_WATER || t === T_BRIDGEW;
 let hdOv = null, hdImg = null, hdNoise = null, nodeGrid = null, lastTrees = null;
@@ -584,9 +595,78 @@ function roadDecal(g, tx, ty, x, y) { // tapas de cloaca, manchas de aceite, bac
     g.stroke();
   }
 }
+// ---- Bordes desde la red vial: cada tramo de calle es una franja recta (calzada y vereda medidas sobre los
+// tiles a lo largo de todo el tramo), así las diagonales y los parterres quedan derechos y no siguen la escalera.
+const eprof = new Map();
+let segGrid = null;
+function edgeProf(e) {
+  let p = eprof.get(e); if (p !== undefined) return p;
+  const a = ea[e], ux = edx[e], uy = edy[e], rx = -uy, ry = ux, L = elen[e], S = [[], [], [], []]; // dP, dN, sP, sN
+  const n = Math.max(2, Math.min(48, Math.floor(L / 5))); // hasta 48 muestras por tramo
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) * L / n; if (L > 70 && (t < 24 || t > L - 24)) continue;
+    const x = nx[a] + ux * t, y = ny[a] + uy * t;
+    if (!ROADC(tileAtPx(x, y))) continue;
+    for (let s = 0; s < 2; s++) {
+      const sg = s ? -1 : 1; let d = 0;
+      while (d < 130 && ROADC(tileAtPx(x + rx * d * sg, y + ry * d * sg))) d++;
+      if (d >= 130) continue;
+      let w = d; while (w - d < 48 && tileAtPx(x + rx * w * sg, y + ry * w * sg) === T_SIDE) w++;
+      S[s].push(d); S[2 + s].push(w - d);
+    }
+  }
+  const robust = arr => { // media de las muestras cercanas a la mediana (descarta bocacalles y cocheras)
+    if (arr.length < 3) return NaN;
+    const s = arr.slice().sort((p2, q) => p2 - q), m = s[s.length >> 1]; let k = 0, sum = 0;
+    for (const v of s) if (Math.abs(v - m) <= 7) { sum += v; k++; }
+    return sum / k;
+  };
+  const dP = robust(S[0]) - 0.5, dN = robust(S[1]) - 0.5, sP = robust(S[2]) || 0, sN = robust(S[3]) || 0;
+  p = isNaN(dP) || isNaN(dN) || dP + dN < 8 ? null
+    : { c: (dP - dN) / 2, h: (dP + dN) / 2, sc: (dP + sP - dN - sN) / 2, sh: (dP + sP + dN + sN) / 2 };
+  eprof.set(e, p); return p;
+}
+function segsNear(cx, cy) {
+  if (!segGrid) {
+    segGrid = new Map();
+    for (const e of DRIVE_EDGES) {
+      if ((ef[e] & 2) && ea[e] > eb[e]) continue; // las doble mano vienen dos veces
+      const a = ea[e], b = eb[e], m = 110;
+      for (let gy = Math.floor((Math.min(ny[a], ny[b]) - m) / CPX); gy <= Math.floor((Math.max(ny[a], ny[b]) + m) / CPX); gy++)
+        for (let gx = Math.floor((Math.min(nx[a], nx[b]) - m) / CPX); gx <= Math.floor((Math.max(nx[a], nx[b]) + m) / CPX); gx++) {
+          const k = gy * 4096 + gx; let l = segGrid.get(k); if (!l) segGrid.set(k, l = []); l.push(e);
+        }
+    }
+  }
+  const out2 = [];
+  for (const e of segGrid.get(cy * 4096 + cx) || []) {
+    const p = edgeProf(e); if (!p) continue;
+    out2.push({ ax: nx[ea[e]], ay: ny[ea[e]], ux: edx[e], uy: edy[e], L: elen[e], c: p.c, h: p.h, sc: p.sc, sh: p.sh, grp: en[e] });
+  }
+  return out2;
+}
+// distancia con signo (px, negativa adentro) a la calzada y a la vereda según la red: cápsulas por tramo,
+// unión dura dentro de la misma calle y suave entre calles distintas (el radio del cordón en la esquina)
+const NET = { r: 0, s: 0 }, NG_ID = new Int32Array(8), NG_D = new Float32Array(8);
+const NGS = 8, NGR = (TS * 2) / NGS + 1, NGRR = new Float32Array(NGR * NGR), NGRS = new Float32Array(NGR * NGR); // grilla por tile (alta = 2×)
+function netDist(cand, x, y) {
+  let ng = 0, S = 1e9;
+  for (let i = 0; i < cand.length; i++) {
+    const s = cand[i], dx = x - s.ax, dy = y - s.ay, t = dx * s.ux + dy * s.uy, l = dy * s.ux - dx * s.uy;
+    const tc = t < 0 ? t : t > s.L ? t - s.L : 0;
+    const r = Math.sqrt(tc * tc + (l - s.c) * (l - s.c)) - s.h, q = Math.sqrt(tc * tc + (l - s.sc) * (l - s.sc)) - s.sh;
+    if (q < S) S = q;
+    let k = 0; while (k < ng && NG_ID[k] !== s.grp) k++;
+    if (k === ng) { if (ng === 8) k = 7; else ng++; NG_ID[k] = s.grp; NG_D[k] = r; } else if (r < NG_D[k]) NG_D[k] = r;
+  }
+  let R = 1e9;
+  for (let k = 0; k < ng; k++) { const b = NG_D[k], hh = Math.max(22 - Math.abs(R - b), 0) / 22; R = Math.min(R, b) - hh * hh * 5.5; }
+  NET.r = R; NET.s = Math.min(S, R); return NET;
+}
 function buildChunkHD(cx, cy) {
   const N = CPX * GS, [cv, g] = canvas(N, N), M = HD_M, W2 = HD_W;
   const x0 = cx * CH, y0 = cy * CH, cxp = cx * CPX, cyp = cy * CPX;
+  const SEGS = segsNear(cx, cy), cand = [];
   const typ = new Uint8Array(W2 * W2), fS = new Uint8Array(W2 * W2), hasSide = new Uint8Array(W2 * W2);
   const rawR = new Float32Array(W2 * W2), rawS = new Float32Array(W2 * W2), FR = new Float32Array(W2 * W2), FS = new Float32Array(W2 * W2);
   for (let j = 0; j < W2; j++) for (let i = 0; i < W2; i++) typ[j * W2 + i] = tileAt(x0 - M + i, y0 - M + j);
@@ -615,8 +695,13 @@ function buildChunkHD(cx, cy) {
   for (let ly = 0; ly < CH; ly++) for (let lx = 0; lx < CH; lx++) {
     const i = lx + M, j = ly + M, k = j * W2 + i, t = typ[k];
     let sR = 0, sS = 0;
-    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const q = k + dj * W2 + di; sR += rawR[q]; sS += rawS[q]; }
-    if ((sR > 0 && sR < 25) || (sS > 0 && sS < 25)) { edges.push(lx, ly); continue; }
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const q = k + dj * W2 + di; sR += rawR[q]; sS += rawS[q]; }
+    // ¿limita con otro piso "de afuera" (pasto, arena, patio, adoquín...)? entonces también va por píxel, con borde suave
+    let multi = 0;
+    if (!ROADC(t) && t !== T_SIDE) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const q = k + dj * W2 + di, tq = typ[q]; if (!ROADC(tq) && tq !== T_SIDE && fS[q] !== fS[k]) multi = 1;
+    }
+    if ((sR > 0 && sR < 9) || (sS > 0 && sS < 9) || multi) { edges.push(lx, ly, multi); continue; }
     const tt = ROADC(t) ? t : t === T_SIDE ? T_SIDE : WATERC(t) && hasSide[k] ? T_SIDE : fS[k];
     g.drawImage(TEX[tt][Math.floor(hash(x0 + lx, y0 + ly, 1) * V)], lx * TT, ly * TT);
   }
@@ -624,10 +709,43 @@ function buildChunkHD(cx, cy) {
   if (edges.length) {
     if (!hdImg) { hdOv = canvas(N, N); hdImg = hdOv[1].createImageData(N, N); }
     const od = hdImg.data; od.fill(0);
-    for (let e = 0; e < edges.length; e += 2) {
-      const lx = edges[e], ly = edges[e + 1], k = (ly + M) * W2 + lx + M, t = typ[k], vr = Math.floor(hash(x0 + lx, y0 + ly, 1) * V);
-      const own = TEXD[ROADC(t) ? t : T_ROAD][vr], side = TEXD[T_SIDE][vr], outer = TEXD[fS[k]][vr] || TEXD[T_YARD][vr];
+    const BT = new Float32Array(4 * 9), TY = [0, 0, 0, 0], TXD = [null, null, null, null];
+    for (let e = 0; e < edges.length; e += 3) {
+      const lx = edges[e], ly = edges[e + 1], multi = edges[e + 2], k = (ly + M) * W2 + lx + M, t = typ[k], vr = Math.floor(hash(x0 + lx, y0 + ly, 1) * V);
+      const own = TEXD[ROADC(t) ? t : T_ROAD][vr], side = TEXD[T_SIDE][vr];
+      let outer = TEXD[fS[k]][vr] || TEXD[T_YARD][vr];
       const med = t === T_MEDIAN || fS[k] === T_MEDIAN;
+      // varios pisos de afuera: máscara desenfocada de cada uno en los 3x3 nodos alrededor (gana el mayor)
+      let nT = 0;
+      if (multi) {
+        const ft = q => { const tq = typ[q]; return ROADC(tq) || tq === T_SIDE ? fS[k] : fS[q]; };
+        TY[0] = fS[k]; nT = 1;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const v = ft(k + dj * W2 + di); let s = 0; while (s < nT && TY[s] !== v) s++; if (s === nT && nT < 4) TY[nT++] = v;
+        }
+        for (let s = 0; s < nT; s++) {
+          TXD[s] = TEXD[TY[s]][vr] || TEXD[T_YARD][vr];
+          for (let b = 0; b < 3; b++) for (let a = 0; a < 3; a++) {
+            const n0 = k + (b - 1) * W2 + (a - 1); let acc = 0;
+            for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (ft(n0 + dj * W2 + di) === TY[s]) acc += (2 - (di < 0 ? -di : di)) * (2 - (dj < 0 ? -dj : dj));
+            BT[s * 9 + b * 3 + a] = acc / 16 + (s === 0 ? 0.001 : 0);
+          }
+        }
+      }
+      // tramos de calle que pasan cerca de este tile
+      cand.length = 0;
+      const tcx = (x0 + lx + 0.5) * TS, tcy = (y0 + ly + 0.5) * TS;
+      for (const s of SEGS) {
+        const dx = tcx - s.ax, dy = tcy - s.ay, tt = dx * s.ux + dy * s.uy, l = dy * s.ux - dx * s.uy, tc = tt < 0 ? tt : tt > s.L ? tt - s.L : 0;
+        if (Math.sqrt(tc * tc + (l - s.sc) * (l - s.sc)) - s.sh < 24) cand.push(s);
+      }
+      const useNet = cand.length > 0;
+      if (useNet) { // la distancia a la red se evalúa en una grilla de 4 px (alta) y se interpola: es suave
+        for (let gy = 0, n = 0; gy < NGR; gy++) for (let gx = 0; gx < NGR; gx++, n++) {
+          const nd = netDist(cand, cxp + (lx * TT + gx * NGS) / GS, cyp + (ly * TT + gy * NGS) / GS);
+          NGRR[n] = -nd.r / TS; NGRS[n] = -nd.s / TS;
+        }
+      }
       for (let py = 0; py < TT; py++) {
         const fv = ly + (py + 0.5) / TT + M - 0.5, j0 = fv | 0, wy = fv - j0;
         let o = ((ly * TT + py) * N + lx * TT) * 4;
@@ -635,7 +753,14 @@ function buildChunkHD(cx, cy) {
           const fu = lx + (px + 0.5) / TT + M - 0.5, i0 = fu | 0, wx = fu - i0, q = j0 * W2 + i0;
           let a = FR[q], b = FR[q + 1], c = FR[q + W2], d = FR[q + W2 + 1], x2 = a - b - c + d;
           let f = a + (b - a) * wx + (c - a) * wy + x2 * wx * wy, gx = b - a + x2 * wy, gy = c - a + x2 * wx;
-          const dR = (f - 0.5) / Math.max(0.2, Math.sqrt(gx * gx + gy * gy));
+          let dR = (f - 0.5) / Math.max(0.2, Math.sqrt(gx * gx + gy * gy)), nS = 0, wS = 0;
+          if (useNet) { // si la red y los tiles coinciden (±1 tile), manda la red: borde recto
+            const u = (px + 0.5) / NGS, v = (py + 0.5) / NGS, iu = u | 0, iv = v | 0, fu2 = u - iu, fv2 = v - iv, n = iv * NGR + iu;
+            const w00 = (1 - fu2) * (1 - fv2), w10 = fu2 * (1 - fv2), w01 = (1 - fu2) * fv2, w11 = fu2 * fv2;
+            const nR = NGRR[n] * w00 + NGRR[n + 1] * w10 + NGRR[n + NGR] * w01 + NGRR[n + NGR + 1] * w11;
+            const dd = Math.abs(nR - dR), w = dd < 0.55 ? 1 : dd > 1.05 ? 0 : (1.05 - dd) / 0.5;
+            dR += (nR - dR) * w; nS = NGRS[n] * w00 + NGRS[n + 1] * w10 + NGRS[n + NGR] * w01 + NGRS[n + NGR + 1] * w11; wS = w;
+          }
           const ti = (py * TT + px) * 4;
           let R0, G0, B0;
           if (dR > 0.24) { R0 = own[ti]; G0 = own[ti + 1]; B0 = own[ti + 2]; }
@@ -645,7 +770,16 @@ function buildChunkHD(cx, cy) {
           else {
             a = FS[q]; b = FS[q + 1]; c = FS[q + W2]; d = FS[q + W2 + 1]; x2 = a - b - c + d;
             f = a + (b - a) * wx + (c - a) * wy + x2 * wx * wy; gx = b - a + x2 * wy; gy = c - a + x2 * wx;
-            const dS = (f - 0.5) / Math.max(0.2, Math.sqrt(gx * gx + gy * gy));
+            let dS = (f - 0.5) / Math.max(0.2, Math.sqrt(gx * gx + gy * gy));
+            if (wS > 0) { const dd = Math.abs(nS - dS); if (dd < 1.05) dS += (nS - dS) * (dd < 0.55 ? 1 : (1.05 - dd) / 0.5); }
+            if (nT > 1 && dS <= 0) {
+              const a0 = i0 - lx - M + 1, b0 = j0 - ly - M + 1; let best = -1;
+              for (let s = 0; s < nT; s++) {
+                const o9 = s * 9 + b0 * 3 + a0, A = BT[o9], B2 = BT[o9 + 1], C2 = BT[o9 + 3], D = BT[o9 + 4];
+                const v = A + (B2 - A) * wx + (C2 - A) * wy + (A - B2 - C2 + D) * wx * wy;
+                if (v > best) { best = v; outer = TXD[s]; }
+              }
+            }
             const src = dS > 0 ? side : outer;
             R0 = src[ti]; G0 = src[ti + 1]; B0 = src[ti + 2];
             if (dS > 0 && dS < 0.06) { R0 *= 0.8; G0 *= 0.8; B0 *= 0.8; } // línea municipal
@@ -673,14 +807,9 @@ function buildChunkHD(cx, cy) {
   // 4) detalles por tile (en px del mundo)
   for (let ly = 0; ly < CH; ly++) for (let lx = 0; lx < CH; lx++) {
     const tx = x0 + lx, ty = y0 + ly, px = lx * TS, py = ly * TS, t = tileAt(tx, ty);
-    if (t === T_YARD) {
-      const side = n => n === T_SIDE;
-      g.fillStyle = '#b4aea4';
-      if (side(tileAt(tx, ty - 1))) g.fillRect(px, py, TS, 1.5);
-      if (side(tileAt(tx, ty + 1))) g.fillRect(px, py + TS - 1.5, TS, 1.5);
-      if (side(tileAt(tx - 1, ty))) g.fillRect(px, py, 1.5, TS);
-      if (side(tileAt(tx + 1, ty))) g.fillRect(px + TS - 1.5, py, 1.5, TS);
-      if (hash(tx, ty, 21) < 0.012 && tileAt(tx + 1, ty) === T_YARD && tileAt(tx, ty + 1) === T_YARD && tileAt(tx + 1, ty + 1) === T_YARD) {
+    if (t === T_YARD) { // (la línea municipal ya la marca el pase de bordes suaves)
+      if (hash(tx, ty, 21) < 0.012 && tileAt(tx + 1, ty) === T_YARD && tileAt(tx, ty + 1) === T_YARD && tileAt(tx + 1, ty + 1) === T_YARD
+          && [[-2, 0], [3, 0], [0, -2], [0, 3], [3, 3], [-2, -2]].some(([dx, dy]) => isBuilding(tileAt(tx + dx, ty + dy)))) { // pileta: solo en el fondo de una casa
         g.fillStyle = '#e8e8e0'; g.fillRect(px + 4, py + 4, 16, 10);
         g.fillStyle = '#2f8cc4'; g.fillRect(px + 5, py + 5, 14, 8);
         g.fillStyle = '#5cb4e4'; g.fillRect(px + 5, py + 5, 14, 2);
@@ -744,6 +873,25 @@ function buildChunkHD(cx, cy) {
     crossings(g, a, cxp, cyp);
   }
   for (const q of PITCHES) drawPitch(g, q, cxp, cyp);
+  // bajo la higuera del Parque Mitre: pasto ralo, hojarasca y raíces que serpentean por el piso
+  for (const [bx, by, br] of BIGTREES) {
+    if (bx + br < cxp || bx - br > cxp + CPX || by + br < cyp || by - br > cyp + CPX) continue;
+    const lx0 = bx - cxp, ly0 = by - cyp, gr = g.createRadialGradient(lx0, ly0, br * 0.1, lx0, ly0, br);
+    gr.addColorStop(0, 'rgba(92,72,46,0.85)'); gr.addColorStop(0.55, 'rgba(84,78,44,0.55)'); gr.addColorStop(1, 'rgba(70,90,40,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(lx0, ly0, br, 0, 7); g.fill();
+    const r = rng(777); g.lineCap = 'round';
+    for (let i = 0; i < 46; i++) {
+      let a = r() * 6.283, d = br * (0.08 + r() * 0.06), x = lx0 + Math.cos(a) * d, y = ly0 + Math.sin(a) * d;
+      const L = br * (0.25 + r() * 0.45), w = 2.6 - L / br * 2;
+      g.strokeStyle = r() < 0.5 ? '#7a6a56' : '#8c7c66'; g.lineWidth = Math.max(0.6, w); g.beginPath(); g.moveTo(x, y);
+      for (let s = 0; s < L; s += 4) { a += (r() - 0.5) * 0.5; x += Math.cos(a) * 4; y += Math.sin(a) * 4; g.lineTo(x, y); }
+      g.stroke();
+    }
+    for (let i = 0; i < 260; i++) { // hojas caídas
+      const a = r() * 6.283, d = br * Math.sqrt(r()) * 0.95;
+      g.fillStyle = ['#5a6a2e', '#7a6a34', '#4a5a28', '#8a7440'][i & 3]; g.fillRect(lx0 + Math.cos(a) * d, ly0 + Math.sin(a) * d, 1, 0.6);
+    }
+  }
   // árboles y palmeras: van en 3D; acá solo la cazuela de tierra en la vereda
   const trees = [], mine = (x, y) => x >= cxp && x < cxp + CPX && y >= cyp && y < cyp + CPX;
   for (const [tx, ty, r, kind] of PROP_TREES) {
@@ -887,8 +1035,9 @@ function getChunk(cx, cy) {
   let c = chunks.get(k);
   if (!c) {
     c = { cv: buildChunk(cx, cy), used: frameNo }; builtThisFrame++;
+    c.trees = lastTrees; // en 3D los árboles se levantan en volumen (render3d.js)
     chunks.set(k, c);
-    if (chunks.size > 72) {
+    if (chunks.size > (GS > 1 ? 56 : 72)) { // en alta cada chunk pesa 2,4 MB (más su textura en la GPU)
       let ok = -1, ou = Infinity;
       for (const [kk, v] of chunks) if (v.used < ou) { ou = v.used; ok = kk; }
       if (R3) R3.evict(chunks.get(ok));

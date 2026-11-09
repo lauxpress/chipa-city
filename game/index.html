@@ -61,10 +61,12 @@
   #credit { position: fixed; left: 50%; bottom: 2px; transform: translateX(-50%); font-family: system-ui, sans-serif; font-size: 10px; opacity: .55; pointer-events: none; }
   /* ---- misiones (missions.js crea los elementos) ---- */
   .mhud { position: fixed; pointer-events: none; text-shadow: 2px 2px 0 #000; z-index: 25; }
-  #m-hud { top: 12px; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(520px, calc(100vw - 560px)); min-width: 220px;
+  /* Zonas del HUD del juego que hay que respetar: arriba-izq carteles de calle (~260x130), arriba-der plata y estrellas (~110x60),
+     abajo-izq arma + logo de Baresand (~140x120), abajo-der minimapa (240x240, 120x120 en pantallas chicas). */
+  #m-hud { top: 12px; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(520px, calc(100vw - 580px)); min-width: 220px;
            background: rgba(10,8,16,.82); border: 2px solid #f4f0d8; box-shadow: 4px 4px 0 rgba(0,0,0,.6); padding: 8px 12px 9px; text-align: center; }
   #m-hud .m-title { font-size: 7px; color: var(--accent); letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase; }
-  #m-hud .m-obj { font-size: 10px; line-height: 1.6; }
+  #m-hud .m-obj { font-size: 10px; line-height: 1.6; text-transform: uppercase; white-space: pre-line; }
   #m-hud .m-row { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; font-size: 9px; }
   #m-hud .m-arrow { display: inline-block; color: var(--accent); font-family: system-ui, sans-serif; font-size: 16px; line-height: 1; }
   #m-hud .m-time { color: #fff; } #m-hud .m-time.red, .red { color: var(--red) !important; }
@@ -73,15 +75,18 @@
   #m-banner { top: 24%; left: 16px; right: 16px; text-align: center; font-size: clamp(16px, 3.2vw, 34px); color: var(--accent); line-height: 1.5; }
   #m-banner small { font-size: .45em; color: #f4f0d8; letter-spacing: 2px; }
   #m-banner.small { font-size: clamp(12px, 2vw, 20px); } #m-banner.red { color: var(--red); }
-  #m-prompt { bottom: 64px; left: 50%; transform: translateX(-50%); font-size: 9px; background: rgba(10,8,16,.75); padding: 7px 10px; border: 2px solid #ff9f3f; white-space: nowrap; }
+  /* abajo: cartel de ENTER, subtítulos y diálogos van entre la columna del arma (izq) y el minimapa (der) */
+  #m-prompt, #m-sub, #m-dlg { left: 150px; right: 276px; width: auto; margin: 0 auto; transform: none; }
+  #m-prompt { bottom: 24px; width: max-content; max-width: calc(100vw - 426px); font-size: 9px; line-height: 1.6; background: rgba(10,8,16,.75); padding: 7px 10px; border: 2px solid #ff9f3f; text-align: center; }
   #m-prompt b { color: #ff9f3f; font-weight: normal; }
-  #m-bar { top: 128px; left: 50%; transform: translateX(-50%); width: 260px; text-align: center; font-size: 8px; }
+  /* la barra de progreso va adentro del recuadro de objetivo (missions.js la mueve ahí) */
+  #m-bar { position: static; margin: 8px auto 0; width: min(260px, 100%); text-align: center; font-size: 8px; }
   .m-bar-out { margin-top: 6px; height: 12px; border: 2px solid #f4f0d8; background: #000; box-shadow: 3px 3px 0 rgba(0,0,0,.6); }
   .m-bar-in { height: 100%; width: 0; background: var(--accent); }
-  #m-sub { bottom: 64px; left: 50%; transform: translateX(-50%); max-width: min(640px, calc(100vw - 32px)); font-size: 9px; line-height: 1.7; text-align: center;
+  #m-sub { bottom: 40px; width: max-content; max-width: min(640px, calc(100vw - 426px)); font-size: 9px; line-height: 1.7; text-align: center;
            background: rgba(10,8,16,.7); padding: 8px 12px; }
   #m-sub b { color: var(--sky); font-weight: normal; }
-  #m-dlg { position: fixed; z-index: 30; bottom: 56px; left: 50%; transform: translateX(-50%); width: min(680px, calc(100vw - 32px)); display: flex; gap: 12px; align-items: flex-start;
+  #m-dlg { position: fixed; z-index: 30; bottom: 24px; max-width: 680px; display: flex; gap: 12px; align-items: flex-start;
            background: rgba(10,8,16,.94); border: 3px solid #f4f0d8; box-shadow: 5px 5px 0 rgba(0,0,0,.6); padding: 12px; }
   #m-dlg .m-face { width: 96px; height: 96px; image-rendering: pixelated; border: 2px solid #000; outline: 2px solid #f4f0d8; flex: none; }
   #m-dlg .m-body { flex: 1; min-width: 0; }
@@ -120,9 +125,31 @@
   .m-bonus { font-size: 10px; line-height: 2; } .m-bonus.dim { opacity: .7; } .m-bonus.new { color: var(--sky); }
   .m-reason { font-size: clamp(10px, 1.6vw, 14px); line-height: 1.7; margin: 12px auto; max-width: 720px; }
   #m-fail .m-keys { font-size: 10px; animation: blink 1s steps(2) infinite; }
-  @media (max-width: 900px) { #m-hud { top: auto; bottom: 150px; max-width: calc(100vw - 32px); } #m-bar { top: auto; bottom: 240px; } }
-  @media (max-width: 640px) { #m-dlg .m-face { width: 64px; height: 64px; } #m-dlg .m-text { font-size: 9px; } #m-prompt { white-space: normal; max-width: calc(100vw - 32px); } }
-  @media (max-width: 640px) { #minimap { width: 120px; height: 120px; } #hint { display: none; } #baresand img { height: 22px; } #weapon { bottom: 50px; } }
+  /* con un diálogo o un menú de misión abierto se esconden la ayuda y el velocímetro (quedan debajo de la caja) */
+  body.m-talking #hint, body.m-talking #speed { visibility: hidden; }
+  /* pantallas medianas: el objetivo pasa a la derecha, debajo de la plata y las estrellas; lo de abajo sube por encima del minimapa */
+  @media (max-width: 860px) {
+    #m-hud { top: 68px; left: auto; right: 12px; transform: none; max-width: calc(100vw - 300px); min-width: 0; }
+    #m-prompt, #m-sub, #m-dlg { left: 16px; right: 16px; bottom: 268px; max-width: min(680px, calc(100vw - 32px)); }
+  }
+  /* celulares: minimapa chico; el objetivo va debajo de los carteles de calle, a lo ancho */
+  @media (max-width: 640px) {
+    #minimap { width: 120px; height: 120px; } #hint { display: none; } #baresand img { height: 22px; } #weapon { bottom: 50px; }
+    #m-hud { top: 150px; left: 12px; right: 12px; max-width: none; width: auto; padding: 6px 8px; }
+    #m-hud .m-obj { font-size: 9px; }
+    #m-prompt, #m-sub, #m-dlg { bottom: 148px; }
+    #m-dlg { padding: 8px; gap: 8px; } #m-dlg .m-face { width: 56px; height: 56px; } #m-dlg .m-text { font-size: 9px; min-height: 40px; }
+    #m-prompt { white-space: normal; }
+    .m-panel { padding: 0 10px 10px; } .m-card-title { font-size: 12px; } .m-li { font-size: 8px; }
+  }
+  /* pantallas bajas (celular acostado): minimapa chico y todo más compacto */
+  @media (max-height: 520px) {
+    #minimap { width: 120px; height: 120px; } #hint { display: none; }
+    #m-prompt, #m-sub, #m-dlg { bottom: 12px; left: 150px; right: 150px; }
+    #m-dlg .m-face { width: 48px; height: 48px; } #m-dlg .m-text { font-size: 9px; min-height: 32px; line-height: 1.6; }
+    #m-hud { top: 8px; } .m-li-wrap { max-height: 46vh; } #m-banner, #m-done, #m-fail { top: 18%; }
+  }
+  @media (max-height: 520px) and (max-width: 640px) { #m-hud { top: 8px; left: auto; right: 12px; max-width: calc(100vw - 280px); } }
 </style>
 </head>
 <body>

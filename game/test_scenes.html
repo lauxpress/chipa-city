@@ -22,6 +22,8 @@
   <label><input id="fps" type="checkbox" checked> FPS</label>
 </div>
 <div id="btns"></div>
+<h1 style="font-size:11px;margin-top:18px">Con los opts de las misiones</h1>
+<div id="mbtns"></div>
 <div id="log"></div>
 <script src="vendor/three.min.js"></script>
 <script>
@@ -31,6 +33,7 @@
   window.__scenesShowFps = true;
 </script>
 <script src="scenes.js"></script>
+<script src="missions_data.js"></script>
 <script>
   const log = t => { document.getElementById('log').textContent = t + '\n' + document.getElementById('log').textContent; };
   for (const s of Chipa.scenes.list) {
@@ -42,11 +45,28 @@
     };
     document.getElementById('btns').appendChild(b);
   }
+  // escenas tal como las llaman las misiones (opts del guion en missions_data.js)
+  window.MISSION_SCENES = [];
+  for (const m of (window.MISSIONS || [])) (m.steps || []).forEach((s, k) => {
+    if (s.type !== 'scene') return;
+    const name = m.id + '#' + k + ' ' + s.id + (s.opts && s.opts.pomberoAyuda !== undefined ? (s.opts.pomberoAyuda ? ' (con Pombero)' : ' (sin Pombero)') : '');
+    MISSION_SCENES.push({ name, id: s.id, opts: s.opts || {} });
+    const b = document.createElement('button'); b.textContent = name; b.style.fontSize = '9px';
+    b.onclick = () => { window.__scenesShowFps = document.getElementById('fps').checked; Chipa.scenes.play(s.id, Object.assign({ mission: m.id, flags: {} }, s.opts)).then(r => log(name + ' → ' + JSON.stringify(r))); };
+    document.getElementById('mbtns').appendChild(b);
+  });
+  // __goM('tunel', 0, 'captura') abre la n-ésima escena de misión con ese id
+  window.__goM = (id, n = 0, name, steps = 90, extra = {}) => {
+    const s = MISSION_SCENES.filter(x => x.id === id)[n]; if (!s) return 'no hay';
+    return __go(id, Object.assign({}, s.opts, extra), name, steps);
+  };
   // captura: renderiza y manda el PNG al servidor local de capturas
   window.__shot = async (name) => {
     const c = document.querySelector('.cs3d-gl'); if (!c) return 'sin escena';
     const url = c.toDataURL('image/png');
-    const r = await fetch('http://127.0.0.1:8767/' + (name || 'shot'), { method: 'POST', body: url });
+    // puerto del servidor de capturas: ?shot=8771 en la URL o window.__shotPort (def. 8767)
+    const port = window.__shotPort || new URLSearchParams(location.search).get('shot') || 8767;
+    const r = await fetch('http://127.0.0.1:' + port + '/' + (name || 'shot'), { method: 'POST', body: url });
     return await r.text();
   };
   // abre una escena, avanza n pasos y captura (funciona con la pestaña en segundo plano)
