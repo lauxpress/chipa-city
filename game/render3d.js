@@ -578,7 +578,8 @@ window.createRender3D = function (G) {
       }
     }
     if (spec.towers) { // torres al frente: el extremo corto que da a la calle o a la plaza
-      const tw = spec.towers, half = tw.w * MPX / 2, th = tw.h * MPX, cap = rgb(tw.capColor);
+      // una torre sola se agranda (más alta y ancha) para que se lea desde la cámara cenital
+      const tw = spec.towers, solo = tw.layout === 'single', half = tw.w * MPX / 2 * (solo ? 1.6 : 1), th = tw.h * MPX + (solo ? Math.min(tw.h * MPX * 0.4, 32) : 0), cap = rgb(tw.capColor);
       const out = s => G.tileAtPx(o.cx + o.ax * s * (o.la + 26), o.cy + o.ay * s * (o.la + 26));
       const s = STREETISH(out(1)) || !STREETISH(out(-1)) ? 1 : -1;
       const fx = o.cx + o.ax * s * (o.la - half), fy = o.cy + o.ay * s * (o.la - half);
@@ -601,6 +602,12 @@ window.createRender3D = function (G) {
         if (tw.cap === 'dome') dome(plain, x, y, o.ax, o.ay, half * 0.8, z, half * 1.4, cap);
         else if (tw.cap === 'spire') { pyramid(plain, x, y, o.ax, o.ay, half * 0.82, z, z + th * 0.45, cap); obox(plain, x, y, o.ax, o.ay, 0.6, 0.6, z + th * 0.45, z + th * 0.45 + 7, [0.9, 0.86, 0.6], [0.7, 0.66, 0.4]); }
         else pyramid(plain, x, y, o.ax, o.ay, half * 0.9, z, z + half * 1.6, cap);
+        if (spec.style === 'iglesia') { // cruz de hierro en la punta, con los brazos en cruz también vistos desde arriba
+          const zc = tw.cap === 'dome' ? z + half * 1.4 + 6 : tw.cap === 'spire' ? z + th * 0.45 + 7 : z + half * 1.6, cH = Math.max(9, half * 1.1), gold = [0.95, 0.82, 0.4];
+          obox(plain, x, y, o.ax, o.ay, 0.7, 0.7, zc, zc + cH, gold, mul(gold, 0.75));
+          obox(plain, x, y, o.ax, o.ay, cH * 0.36, 0.6, zc + cH * 0.62, zc + cH * 0.78, gold, mul(gold, 0.75));
+          obox(plain, x, y, o.ax, o.ay, 0.6, cH * 0.36, zc + cH * 0.62, zc + cH * 0.78, gold, mul(gold, 0.75));
+        }
       }
     }
   }
@@ -1488,8 +1495,173 @@ window.createRender3D = function (G) {
     birds.geo.attributes.position.needsUpdate = true; birds.geo.computeVertexNormals();
   }
 
+  // ------------------------------------------------------------ props del cartógrafo: lanchas, muelles, banderas, sombrillas, juegos
+  const PRX = G.PROPS || {}, tpx = t => (t + 0.5) * TS;
+  // banderas: paño en tiras que flamea en el vertex shader (aFlag = distancia al mástil, 0..1)
+  const flagMat = new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide });
+  flagMat.onBeforeCompile = sh => {
+    sh.uniforms.uWT = U_TIME;
+    sh.vertexShader = 'attribute float aFlag;\nuniform float uWT;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      { float ph = position.x * 0.37 + position.y * 0.23;
+        float w = sin(uWT * 7.0 - aFlag * 7.0 + ph) * 1.1 + sin(uWT * 12.3 - aFlag * 13.0 + ph * 2.0) * 0.35;
+        transformed += vec3(0.6, 0.8, 0.35) * w * aFlag; }`);
+  };
+  flagMat.customProgramCacheKey = () => 'flag';
+  function flagCloth(fg, x, y, z, len, hgt, col) { // paño que sale del mástil a favor del viento, algo acostado para que se vea desde arriba
+    const dx = 0.8, dy = 0.6, N = 6; // viento en coords 2D (y hacia el sur): hacia el este-sur
+    const ax = -dy * 0.55, ay = dx * 0.55, az = -0.83; // eje "alto" del paño, inclinado
+    for (let i = 0; i < N; i++) {
+      const f0 = i / N, f1 = (i + 1) / N, c = mul(col, i % 2 ? 0.9 : 1);
+      const P = (f, k) => [x + dx * len * f + ax * hgt * k, y + dy * len * f + ay * hgt * k, z + az * hgt * k - f * 1.5, f];
+      vquad(fg, P(f0, 0), P(f1, 0), P(f1, 1), P(f0, 1), c);
+    }
+  }
+  function flagMesh(fg) {
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(fg.pos, 3)); geo.setAttribute('color', new T.Float32BufferAttribute(fg.col, 3));
+    geo.setAttribute('aFlag', new T.Float32BufferAttribute(fg.w, 1)); geo.computeVertexNormals(); geo.computeBoundingSphere();
+    const m = new T.Mesh(geo, flagMat); m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; m.updateMatrix(); return m;
+  }
+  const ANIM = []; // objetos que se mueven solos (lanchas, calesita, velas)
+  (function buildCartoProps() {
+    const gp = Geo(), fg = VG();
+    WF = () => 0;
+    // --- lanchas amarradas en el puerto deportivo: casco con proa, cubierta, parabrisas, asientos y motor fuera de borda
+    const HULL = ['#f4f4f0', '#f4f4f0', '#2a5a9a', '#c83a2a', '#e8e4d8', '#1e3a5a'].map(rgb);
+    for (const [xt, yt, a, lm] of PRX.boats || []) {
+      const L = lm * HPM, W2 = L * 0.38, hh = 1.1 * MPX, g = Geo(), r = lcg(Math.floor(xt * 97 + yt * 13)), hull = HULL[Math.floor(r() * HULL.length)];
+      const pts = [[-L / 2, -W2 / 2], [L * 0.2, -W2 / 2], [L / 2, 0], [L * 0.2, W2 / 2], [-L / 2, W2 / 2]];
+      prism(g, pts, -2, hh, rgb('#e8e6de'), hull);
+      prism(g, pts.map(([u, v]) => [u * 0.86, v * 0.8]), hh, hh + 0.4, rgb('#c8b48c'), rgb('#c8b48c')); // cubierta de teca
+      obox(g, -L * 0.02, 0, 1, 0, L * 0.06, W2 * 0.4, hh, hh + 2.4, rgb('#34465e'), rgb('#5a7898'));      // parabrisas
+      obox(g, -L * 0.2, 0, 1, 0, L * 0.1, W2 * 0.34, hh, hh + 1.2, rgb('#e8dcc0'), rgb('#c8bca0'));      // asientos
+      obox(g, -L / 2 - 0.8, 0, 1, 0, 0.9, 1.1, hh - 1, hh + 2.6, rgb('#2a2a30'), rgb('#3a3a42'));         // motor
+      if (r() < 0.5) obox(g, L * 0.32, 0, 1, 0, 0.4, 0.4, hh, hh + 6, rgb('#d8d8d8'), rgb('#b8b8b8'));    // mástil corto
+      const m = toMesh(g, plainMat); m.matrixAutoUpdate = true;
+      m.position.set(tpx(xt), -tpx(yt), 0.2); m.rotation.z = -a; scene.add(m);
+      ANIM.push(t => { const ph = xt * 1.7 + yt; m.position.z = 0.1 + Math.sin(t * 1.4 + ph) * 0.45; m.rotation.x = Math.sin(t * 1.1 + ph) * 0.05; m.rotation.y = Math.sin(t * 0.9 + ph * 1.3) * 0.035; });
+    }
+    // --- muelles: pilotes del lado del agua y bitas para amarrar
+    for (const pl of PRX.docks || []) for (let i = 0; i + 3 < pl.length; i += 2) {
+      const ax = tpx(pl[i]), ay = tpx(pl[i + 1]), bx = tpx(pl[i + 2]), by = tpx(pl[i + 3]), L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, nx2 = -uy, ny2 = ux;
+      for (const sg of [1, -1]) {
+        let d = 0; while (d < 60 && G.tileAtPx(ax + ux * L / 2 + nx2 * d * sg, ay + uy * L / 2 + ny2 * d * sg) === 6) d++; // ancho del muelle de ese lado
+        for (let t = 4; t < L - 2; t += 3 * HPM) {
+          const x = ax + ux * t + nx2 * (d - 1) * sg, y = ay + uy * t + ny2 * (d - 1) * sg, wet = G.tileAtPx(x + nx2 * 6 * sg, y + ny2 * 6 * sg);
+          if (wet !== 4 && wet !== TT.BRIDGEW) continue;
+          obox(gp, x, y, ux, uy, 0.9, 0.9, -1, 4.2, rgb('#5a4430'), rgb('#4a3626'));                                                       // pilote
+          if (Math.round(t / (3 * HPM)) % 2 === 0) obox(gp, x - nx2 * 3 * sg, y - ny2 * 3 * sg, ux, uy, 0.8, 0.8, 0, 2.2, rgb('#3a3a40'), rgb('#2a2a30')); // bita
+        }
+      }
+    }
+    // --- banderas rojas (Gauchito Gil): mástil de caña y paño que flamea
+    for (const [xt, yt, hm, col] of PRX.flags || []) {
+      const x = tpx(xt), y = tpx(yt), H = hm * MPX;
+      obox(gp, x, y, 1, 0, 0.45, 0.45, 0, H + 1, rgb('#c8b890'), rgb('#a89870'));
+      flagCloth(fg, x, y, H, 1.4 * HPM, 0.95 * HPM, rgb(col || '#d8201c'));
+    }
+    // --- sombrillas del jardín cervecero: paño en 8 gajos a rayas, mástil y mesa redonda
+    for (const [xt, yt, rm] of PRX.parasols || []) {
+      const x = tpx(xt), y = tpx(yt), R = rm * HPM, z1 = 2.3 * MPX, z0 = z1 - 0.5 * MPX, k = Math.floor(xt * 7 + yt * 3);
+      const c1 = rgb(['#f2ece0', '#2a6a4a', '#c8302a'][k % 3]), c2 = rgb('#f6f2e8');
+      obox(gp, x, y, 1, 0, 0.35, 0.35, 0, z1 + 0.6, rgb('#8a8a8a'), rgb('#6a6a6a'));
+      for (let i = 0; i < 8; i++) {
+        const a0 = i * Math.PI / 4, a1 = a0 + Math.PI / 4, c = i % 2 ? c1 : c2;
+        tri3(gp, [x, y, z1 + 0.6], [x + Math.cos(a0) * R, y + Math.sin(a0) * R, z0], [x + Math.cos(a1) * R, y + Math.sin(a1) * R, z0], mul(c, 0.86 + 0.14 * Math.cos(a0 - 2.3)));
+      }
+      prism8(gp, x, y, R * 0.45, 2.1, 2.5, rgb('#7a5a3a'), rgb('#5a4028'));                       // mesa
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; obox(gp, x + Math.cos(a) * R * 0.75, y + Math.sin(a) * R * 0.75, 1, 0, 0.9, 0.9, 0, 1.5, rgb('#3a3a40'), rgb('#2a2a30')); } // banquetas
+    }
+    // --- plaza de juegos: hamacas, tobogán y calesita (que gira) sobre el arenero
+    for (const [xt, yt, rm] of PRX.playgrounds || []) {
+      const x = tpx(xt), y = tpx(yt), R = rm * HPM, red = rgb('#d8402a'), yel = rgb('#e8c030'), blu = rgb('#2a6ac8'), grn = rgb('#3a9a4a'), steel = rgb('#9aa0a8');
+      // hamacas: dos pórticos en A con travesaño y tres asientos colgando
+      const hx = x - R * 0.45, hy = y - R * 0.3, sw = 2.2 * HPM, H = 2.4 * MPX;
+      for (const s of [-1, 1]) for (const d of [-1, 1]) leg3(gp, [hx + s * sw, hy + d * 1.2 * HPM, 0], [hx + s * sw, hy, H], 1, 0, 0.7, red);
+      obox(gp, hx, hy, 1, 0, sw, 0.5, H - 0.6, H + 0.2, red, mul(red, 0.8));
+      for (let i = -1; i <= 1; i++) {
+        const sx = hx + i * sw * 0.6;
+        for (const e of [-0.6, 0.6]) obox(gp, sx + e * HPM, hy, 1, 0, 0.12, 0.12, 1.4, H, steel, steel);
+        obox(gp, sx, hy, 1, 0, 0.75 * HPM, 0.25 * HPM, 1.2, 1.6, [yel, blu, grn][i + 1], mul([yel, blu, grn][i + 1], 0.8));
+      }
+      // tobogán: torre con techito, escalera y rampa
+      const tx2 = x + R * 0.4, ty2 = y - R * 0.25, th = 1.8 * MPX, ts = 0.8 * HPM;
+      for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) obox(gp, tx2 + a * ts, ty2 + b * ts, 1, 0, 0.3, 0.3, 0, th + 4, yel, mul(yel, 0.8));
+      obox(gp, tx2, ty2, 1, 0, ts, ts, th - 0.4, th, blu, mul(blu, 0.8));
+      pyramid(gp, tx2, ty2, 1, 0, ts * 1.25, th + 4, th + 7, red);
+      for (let k = 0; k < 5; k++) obox(gp, tx2 - ts - 1 - k * 0.9, ty2, 1, 0, 0.25, ts * 0.8, 0, th * (1 - k / 5), steel, steel); // escalera
+      quad4(gp, [tx2 + ts, ty2 - ts * 0.7, th], [tx2 + ts, ty2 + ts * 0.7, th], [tx2 + ts + 3 * HPM, ty2 + ts * 0.7, 0.5], [tx2 + ts + 3 * HPM, ty2 - ts * 0.7, 0.5], rgb('#f0f0f0'));
+      for (const e of [-1, 1]) quad4(gp, [tx2 + ts, ty2 + e * ts * 0.7, th], [tx2 + ts + 3 * HPM, ty2 + e * ts * 0.7, 0.5], [tx2 + ts + 3 * HPM, ty2 + e * ts * 0.7, 1.6], [tx2 + ts, ty2 + e * ts * 0.7, th + 1.1], mul(red, 0.85));
+      // calesita: plato de gajos de colores con pasamanos, gira
+      const cg = Geo(), CR = 1.5 * HPM, cols = [red, yel, blu, grn];
+      for (let i = 0; i < 8; i++) {
+        const a0 = i * Math.PI / 4, a1 = a0 + Math.PI / 4;
+        quad4(cg, [0, 0, 1.2], [Math.cos(a0) * CR, Math.sin(a0) * CR, 1.2], [Math.cos(a1) * CR, Math.sin(a1) * CR, 1.2], [0, 0, 1.2], cols[i % 4]);
+        quad4(cg, [Math.cos(a0) * CR, Math.sin(a0) * CR, 0.4], [Math.cos(a1) * CR, Math.sin(a1) * CR, 0.4], [Math.cos(a1) * CR, Math.sin(a1) * CR, 1.2], [Math.cos(a0) * CR, Math.sin(a0) * CR, 1.2], mul(cols[i % 4], 0.7));
+        if (i % 2 === 0) leg3(cg, [Math.cos(a0) * CR * 0.9, Math.sin(a0) * CR * 0.9, 1.2], [Math.cos(a0) * CR * 0.25, Math.sin(a0) * CR * 0.25, 3.4], -Math.sin(a0), Math.cos(a0), 0.3, steel);
+      }
+      obox(cg, 0, 0, 1, 0, 0.6, 0.6, 1.2, 3.6, steel, steel);
+      const cm = toMesh(cg, plainMat); cm.matrixAutoUpdate = true; cm.position.set(x - R * 0.05, -(y + R * 0.45), 0); scene.add(cm);
+      ANIM.push(t => { cm.rotation.z = t * 0.9; });
+      // bancos alrededor
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78; obox(gp, x + Math.cos(a) * (R + 4), y + Math.sin(a) * (R + 4), -Math.sin(a), Math.cos(a), 1.6 * HPM / 2, 0.4 * HPM, 1.2, 1.8, rgb('#8a6444'), rgb('#6a4a30')); }
+    }
+    // --- altar del Gauchito Gil: casita roja en el centro de las banderas, banderines, velas y cintas
+    const fl = (PRX.flags || []).map(([xt, yt, hm]) => [tpx(xt), tpx(yt), hm * MPX]);
+    if (fl.length) {
+      const ax0 = fl.reduce((s, f) => s + f[0], 0) / fl.length, ay0 = fl.reduce((s, f) => s + f[1], 0) / fl.length;
+      const hasBld = G.BLD.some(b => b.name === 'Altar del Gauchito Gil');
+      // frente hacia la calle más cercana
+      let fx = 0, fy = 1, best = 1e9;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let d = 6; d < 80; d += 3) { const t = G.tileAtPx(ax0 + dx * d, ay0 + dy * d); if (t === 1) { if (d < best) { best = d; fx = dx; fy = dy; } break; } }
+      const wA = 2.6 * HPM / 2, wB = 2 * HPM / 2, H = 1.9 * MPX, redA = rgb('#c8201c'), redD = rgb('#8a1010'), gold = rgb('#f0d040');
+      if (!hasBld) {
+        obox(gp, ax0, ay0, -fy, fx, wA + 0.8, wB + 0.8, 0, 0.8, rgb('#d8d0c0'), rgb('#a8a090'));     // base
+        obox(gp, ax0, ay0, -fy, fx, wA, wB, 0.8, H, redA, mul(redA, 0.8));
+        const ux = -fy, uy = fx, C = (sa, sb, z) => [ax0 + ux * wA * sa + fx * wB * sb, ay0 + uy * wA * sa + fy * wB * sb, z];
+        const R0 = [ax0 - ux * wA, ay0 - uy * wA, H + 3.2], R1 = [ax0 + ux * wA, ay0 + uy * wA, H + 3.2];
+        quad4(gp, C(-1.15, -1.25, H - 0.3), C(1.15, -1.25, H - 0.3), [R1[0] - fx * 0, R1[1], R1[2]], R0, redD);
+        quad4(gp, C(1.15, 1.25, H - 0.3), C(-1.15, 1.25, H - 0.3), R0, R1, mul(redD, 0.8));
+        obox(gp, ax0 + fx * (wB + 0.1), ay0 + fy * (wB + 0.1), ux, uy, wA * 0.45, 0.2, 1.4, H - 0.5, rgb('#2a1a14'), rgb('#2a1a14')); // hornacina
+        obox(gp, ax0 + (R0[0] + R1[0]) / 2 - ax0, ay0 + (R0[1] + R1[1]) / 2 - ay0, 1, 0, 0.3, 0.3, H + 3, H + 7, gold, gold);           // cruz
+        obox(gp, ax0, ay0, ux, uy, 1.4, 0.3, H + 5.3, H + 5.9, gold, gold);
+      }
+      // cintas rojas atadas alrededor y botellas/ofrendas en el piso
+      const rr = lcg(1234);
+      for (let i = 0; i < 26; i++) { const a = rr() * 6.283, d = 6 + rr() * 9; obox(gp, ax0 + Math.cos(a) * d, ay0 + Math.sin(a) * d, Math.cos(a), Math.sin(a), 0.5, 0.3, 0, 1 + rr() * 1.2, rr() < 0.7 ? redA : rgb('#3a8a3a'), mul(redA, 0.8)); }
+      // banderines: del mástil más alto a los otros, triangulitos rojos y amarillos que cuelgan
+      const top = fl.reduce((m, f) => f[2] > m[2] ? f : m, fl[0]);
+      for (const f of fl) {
+        if (f === top) continue;
+        const A = [top[0], top[1], top[2]], B = [f[0], f[1], f[2] - 0.5];
+        for (let k = 0; k < 7; k++) {
+          const s = (k + 0.5) / 7, sag = Math.sin(s * Math.PI) * 3, x = A[0] + (B[0] - A[0]) * s, y = A[1] + (B[1] - A[1]) * s, z = A[2] + (B[2] - A[2]) * s - sag;
+          const dx = (B[0] - A[0]) / 14, dy = (B[1] - A[1]) / 14, c = k % 2 ? gold : redA;
+          vtri(fg, [x - dx * 0.5, y - dy * 0.5, z, 0.3], [x + dx * 0.5, y + dy * 0.5, z, 0.3], [x + 0.6, y + 0.4, z - 2.4, 0.8], c);
+        }
+      }
+      // velas encendidas: llamitas brillantes (bloom) y un resplandor rojo-anaranjado que titila en el piso
+      const candles = new T.Group(), flame = new T.MeshBasicMaterial({ color: new T.Color(3.2, 1.7, 0.6) });
+      const cgeo = new T.BoxGeometry(0.7, 0.7, 1.2), wax = new T.MeshLambertMaterial({ color: 0xf0e8d8 }), wgeo = new T.BoxGeometry(0.9, 0.9, 1.6);
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * 6.283 + rr() * 0.3, d = (wA + 2.2) + rr() * 3, x = ax0 + Math.cos(a) * d, y = ay0 + Math.sin(a) * d;
+        const w = new T.Mesh(wgeo, wax); w.position.set(x, -y, 0.8); candles.add(w);
+        const f2 = new T.Mesh(cgeo, flame); f2.position.set(x, -y, 2.2); candles.add(f2);
+      }
+      scene.add(candles);
+      const glow = new T.Mesh(unitPlane, beamShader(`float r = length(vUv - 0.5) * 2.0; float f = 0.85 + 0.15 * sin(uTime * 13.0) * sin(uTime * 7.3);
+        gl_FragColor = vec4(uCol * pow(max(0.0, 1.0 - r), 2.2) * f, 1.0);`));
+      glow.material.uniforms.uCol.value.setRGB(1.0, 0.32, 0.12); glow.position.set(ax0, -ay0, 1.0); glow.scale.set(70, 70, 1); glow.renderOrder = 6; scene.add(glow);
+      const halo = new T.Mesh(unitPlane, glow.material); halo.position.set(ax0, -ay0, H + 2); halo.scale.set(34, 34, 1); halo.renderOrder = 6; scene.add(halo);
+      ANIM.push(t => { glow.material.uniforms.uTime.value = t; const s = 1 + 0.05 * Math.sin(t * 9.1); glow.scale.set(70 * s, 70 * s, 1); });
+    }
+    if (gp.pos.length) scene.add(toMesh(gp, plainMat));
+    if (fg.pos.length) scene.add(flagMesh(fg));
+  })();
+
   function updateWorld(cx, cy) {
     U_TIME.value = tNow;
+    for (const f of ANIM) f(tNow);
     dust.uniforms.uCam.value.set(cx, -cy, 0);
     updateBirds();
     const wu = water.mat.uniforms, sm = sun.shadow.map ? sun.shadow.map.texture : null;

@@ -703,7 +703,7 @@ function buildChunkHD(cx, cy) {
     const cnt = new Map(); let best = WATERC(t) ? T_SAND : T_YARD, bc = 0, med = false;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue;
-      const n = tileAt(x0 - M + i + dx, y0 - M + j + dy);
+      const ii = i + dx, jj = j + dy, n = ii >= 0 && jj >= 0 && ii < W2 && jj < W2 ? typ[jj * W2 + ii] : tileAt(x0 - M + ii, y0 - M + jj);
       if (n === T_SIDE) { hasSide[k] = 1; continue; }
       if (ROADC(n) || WATERC(n)) continue;
       const nn = isBuilding(n) ? T_YARD : n; if (nn === T_MEDIAN) med = true;
