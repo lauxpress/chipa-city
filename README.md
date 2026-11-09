@@ -24,6 +24,25 @@ Juego top-down estilo 8 bits sobre el **mapa real de Corrientes** (microcentro, 
 | N | sonido on/off |
 | H | ayuda |
 
+## Misiones
+
+Diez misiones con historias de Corrientes, de dificultad creciente (guion completo en [docs/misiones.md](docs/misiones.md)).
+Los personajes con aro naranja (también marcados en el minimapa) dan misiones: acercate y apretá ENTER.
+
+| Tecla | Acción |
+|---|---|
+| TAB / L | menú de misiones (ENTER la marca en el mapa) |
+| ENTER / ESPACIO | avanzar diálogos · aceptar |
+| ↑ ↓ o 1–4 | elegir en una decisión |
+| ESPACIO (mantener) | cortar cables en los postes de la DPEC |
+| ESC | abandonar la misión · salir de una escena |
+| ENTER / R | si fallás: reintentar / empezar de cero |
+
+Algunas misiones pasan a escenas 3D en primera o tercera persona (`game/scenes/`): los túneles bajo la Cruz de los
+Milagros, las cuevas bajo el gomero del Parque Mitre, el santuario del Gauchito Gil, el truco en el Patagonia, la Casa
+de Gobierno y una oficina con tablero eléctrico. Y hay un partido de fútbol en la cancha de Huracán
+(ESPACIO/J patea, X/K pasa, C barre, Q cambia de jugador). Los personajes políticos son inventados.
+
 ## Policía
 
 Cada delito suma "calor" y prende estrellas (hasta 5):
