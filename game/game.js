@@ -2093,8 +2093,15 @@ function updatePlayer(dt) {
   if (player.dead) { player.deadT -= dt; if (player.deadT <= 0) respawn(); return; }
   const L = down('ArrowLeft', 'KeyA'), R = down('ArrowRight', 'KeyD'), U = down('ArrowUp', 'KeyW'), D = down('ArrowDown', 'KeyS');
   if (hit('Enter', 'KeyF', 'NumpadEnter')) tryEnterExit();
+  // joystick táctil (touch.js): se va hacia donde apunta el stick, en vez de girar como tanque
+  const S = STICK.on && Math.hypot(STICK.x, STICK.y) > 0.3 ? STICK : null;
+  const sDiff = S ? (d => Math.atan2(Math.sin(d), Math.cos(d)))(Math.atan2(S.y, S.x) - (player.car ? player.car.a : player.a)) : 0;
   if (player.car) {
     const c = player.car;
+    if (S) {
+      const back = Math.abs(sDiff) > 2.2; // apuntando para atrás: marcha atrás
+      carPhysics(c, dt, { thr: !back, brk: back, steer: back ? 0 : clamp(sDiff * 2.2, -1, 1), hb: down('Space') });
+    } else
     carPhysics(c, dt, { thr: U, brk: D, steer: (R ? 1 : 0) - (L ? 1 : 0), hb: down('Space') });
     player.x = c.x; player.y = c.y; player.vx = c.vx; player.vy = c.vy; player.z = c.z; player.onBridge = c.onBridge;
     sfx.engine(true, c.vf, U);
@@ -2105,8 +2112,9 @@ function updatePlayer(dt) {
   if (hit('KeyE')) cycleWeapon(1);
   player.cool -= dt;
   if (down('Space', 'KeyJ', 'KeyZ')) fire();
-  player.a += ((R ? 1 : 0) - (L ? 1 : 0)) * 4.2 * dt;
-  const spd = U ? 46 : D ? -22 : 0;
+  if (S) player.a += clamp(sDiff, -10 * dt, 10 * dt);
+  else player.a += ((R ? 1 : 0) - (L ? 1 : 0)) * 4.2 * dt;
+  const spd = S ? (Math.abs(sDiff) < 1.2 ? 46 * Math.min(1, Math.hypot(S.x, S.y)) : 0) : U ? 46 : D ? -22 : 0;
   const fx = Math.cos(player.a), fy = Math.sin(player.a);
   const r = 3, free = (x, y) => (player.onBridge && player.z > 6) || !solidPx(x - r, y - r) && !solidPx(x + r, y - r) && !solidPx(x - r, y + r) && !solidPx(x + r, y + r);
   const mx = player.x + fx * spd * dt, my = player.y + fy * spd * dt;
@@ -2124,6 +2132,7 @@ function updatePlayer(dt) {
 
 // ============================================================ INPUT
 const keys = {}, pressed = {};
+const STICK = { on: false, x: 0, y: 0 }; // joystick analógico de touch.js (Chipa.stick), en pantalla: x→derecha, y→abajo
 const GAME_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter']);
 addEventListener('keydown', e => {
   if (MODAL) return; // la escena o minijuego activo maneja sus propias teclas
@@ -2537,7 +2546,7 @@ window.__game = { player, cars, peds, cam, tileAt, MD, crime, wantedLevel, build
 {
   const [S0, W0, N0, E0] = MD.bbox, MX0 = Math.cos((S0 + N0) / 2 * Math.PI / 180) * 111320, MY0 = 110574, TM = MD.tileMeters;
   window.Chipa = {
-    hooks: HOOKS, markers: MARKERS,
+    hooks: HOOKS, markers: MARKERS, stick: STICK,
     get modal() { return MODAL; },
     // abre una pantalla a pantalla completa (escena 3D, minijuego) y pausa el mundo; close() lo devuelve
     openModal(owner) { MODAL = owner || {}; sfx.engine(false, 0, false); [screen, $('screen3d')].forEach(c => c.style.visibility = 'hidden'); },

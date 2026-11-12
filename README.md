@@ -24,6 +24,10 @@ Juego top-down estilo 8 bits sobre el **mapa real de Corrientes** (microcentro, 
 | N | sonido on/off |
 | H | ayuda |
 
+**En el celular:** aparecen un joystick (apoyá el pulgar en la mitad izquierda) y botones a la derecha que cambian según
+dónde estés (ciudad, escena 3D o fútbol). El botón 🎮 los prende y apaga; la primera vez que los prendés pasa a pantalla
+completa. Con `#touch` al final de la URL se fuerzan en una compu (para probar).
+
 ## Misiones
 
 Diez misiones con historias de Corrientes, de dificultad creciente (guion completo en [docs/misiones.md](docs/misiones.md)).
